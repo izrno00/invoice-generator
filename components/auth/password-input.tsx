@@ -1,6 +1,6 @@
 "use client"
 
-import { RiEyeLine, RiEyeOffLine } from "@remixicon/react"
+import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react"
 import { useState } from "react"
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
@@ -19,7 +19,7 @@ export function PasswordInput({ className, ...props }: Omit<React.ComponentProps
           aria-pressed={visible}
           onClick={() => setVisible((v) => !v)}
         >
-          {visible ? <RiEyeOffLine /> : <RiEyeLine />}
+          {visible ? <EyeSlashIcon /> : <EyeIcon />}
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>

@@ -1,6 +1,6 @@
 "use client"
 
-import { RiLogoutBoxRLine } from "@remixicon/react"
+import { SignOutIcon } from "@phosphor-icons/react"
 import { useFormStatus } from "react-dom"
 
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ function SubmitButton() {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" variant="outline" disabled={pending}>
-      {pending ? <Spinner /> : <RiLogoutBoxRLine />}
+      {pending ? <Spinner /> : <SignOutIcon />}
       Log out
     </Button>
   )

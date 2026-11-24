@@ -28,13 +28,13 @@ Rules:
 
 - Whenever I ask you to do something related to Supabase you must know that you have MCP connection to my Supabase project. Do not ever leave SQL or any other actions for user to complete, you do it yourself. Only let user know if you can't accomplish a certain task using MCP.
 
-## UI: shadcn/ui with preset `b7kBsBkh7b`
+## UI: shadcn/ui with preset `b7VWMYRFqd`
 
-This project's UI is built with shadcn/ui using preset `b7kBsBkh7b`. Its settings live in `components.json` (style `base-nova`, base color `zinc`, Remix icons, `inverted-translucent` menus, pointer cursor on buttons). Use it everywhere:
+This project's UI is built with shadcn/ui using preset `b7VWMYRFqd`. Its settings live in `components.json` (style `base-vega`, base color `neutral`, Phosphor icons, `inverted-translucent` menus, pointer cursor on buttons). Use it everywhere:
 
 - Add components with `npx shadcn@latest add <name>` or the shadcn MCP server. Don't hand-write or copy components from elsewhere when a registry component exists.
-- Never re-run `shadcn init` with a different preset or style, and don't edit the theme settings in `components.json`. If init must be re-run, use `npx shadcn@latest init --preset b7kBsBkh7b --template next --pointer`.
-- Icons: use `@remixicon/react` only. Lucide is intentionally not installed.
+- Never re-run `shadcn init` with a different preset or style, and don't edit the theme settings in `components.json`. If init must be re-run, use `npx shadcn@latest init --preset b7VWMYRFqd --template next --pointer --base base`.
+- Icons: use `@phosphor-icons/react` only (in Server Components, import from `@phosphor-icons/react/ssr`). Lucide is intentionally not installed.
 - Class merging: import `cn` from `@/lib/utils` (it wraps shadcn's `cn` package). Don't add `clsx` or `tailwind-merge`.
 - Theme colors and fonts come from the CSS variables in `app/globals.css`. Use the semantic tokens (`bg-primary`, `text-muted-foreground`, etc.), not hardcoded colors.
 

@@ -21,9 +21,9 @@ This document covers **how** the product in [PRD.md](PRD.md) gets built: stack, 
 | Framework | `next` | 16.4.6 | App Router, Turbopack. `next.config.ts` enables `cacheComponents`, `partialPrefetching`, `experimental.agentFeedback` |
 | UI runtime | `react`, `react-dom` | 19.3.0 | |
 | Styling | `tailwindcss`, `@tailwindcss/turbopack` | 4.3.3 | CSS-first config in `app/globals.css` |
-| Components | `shadcn` (CLI), `@base-ui/react` | 4.23 / 1.9 | Preset `b7kBsBkh7b`, style `base-nova` (built on Base UI). See `components.json` |
+| Components | `shadcn` (CLI), `@base-ui/react` | 4.23 / 1.9 | Preset `b7VWMYRFqd`, style `base-vega` (built on Base UI). See `components.json` |
 | Variants / classes | `class-variance-authority`, `cn` | | Use `cn` from `@/lib/utils` only. No `clsx` / `tailwind-merge` |
-| Icons | `@remixicon/react` | 4.9 | The only icon library (no Lucide) |
+| Icons | `@phosphor-icons/react` | 2.1 | The only icon library (no Lucide). Server Components import from `@phosphor-icons/react/ssr` |
 | Animation | `tw-animate-css` | 1.4 | |
 | Supabase | `@supabase/ssr`, `@supabase/supabase-js` | 0.12 / 2.119 | Clients in `lib/client.ts`, `lib/server.ts`, `lib/middleware.ts` |
 | Email | `resend`, `react-email`, `@react-email/render` | 6.39 / 6.11 / 2.3 | `sendEmail()` helper in `lib/email/index.ts` |
@@ -506,7 +506,7 @@ sequenceDiagram
 
 ## 12. UI implementation
 
-Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the registry (via the shadcn MCP or `npx shadcn@latest add`), Remix icons, semantic tokens from `app/globals.css`, `cn` from `@/lib/utils`.
+Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the registry (via the shadcn MCP or `npx shadcn@latest add`), Phosphor icons, semantic tokens from `app/globals.css`, `cn` from `@/lib/utils`.
 
 | Need | shadcn component(s) |
 |---|---|

@@ -1,7 +1,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { RiErrorWarningLine } from "@remixicon/react"
+import { WarningCircleIcon } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -72,7 +72,7 @@ export function UpdatePasswordForm() {
           <FieldGroup>
             {linkExpired && (
               <Alert variant="destructive">
-                <RiErrorWarningLine />
+                <WarningCircleIcon />
                 <AlertTitle>This reset link has expired</AlertTitle>
                 <AlertDescription>
                   Reset links work once and expire after 1 hour.{" "}
@@ -83,7 +83,7 @@ export function UpdatePasswordForm() {
 
             {formError && (
               <Alert variant="destructive">
-                <RiErrorWarningLine />
+                <WarningCircleIcon />
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}

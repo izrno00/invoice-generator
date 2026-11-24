@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { isAuthRetryableFetchError } from "@supabase/supabase-js"
-import { RiErrorWarningLine } from "@remixicon/react"
+import { WarningCircleIcon } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
@@ -76,7 +76,7 @@ export function ForgotPasswordForm() {
           <FieldGroup>
             {formError && (
               <Alert variant="destructive">
-                <RiErrorWarningLine />
+                <WarningCircleIcon />
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}

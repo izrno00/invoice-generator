@@ -1,7 +1,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { RiErrorWarningLine } from "@remixicon/react"
+import { WarningCircleIcon } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -81,7 +81,7 @@ export function SignUpForm() {
           <FieldGroup>
             {formError && (
               <Alert variant="destructive">
-                <RiErrorWarningLine />
+                <WarningCircleIcon />
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}
