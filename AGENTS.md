@@ -24,6 +24,10 @@ Rules:
 - Follow the database schema before creating or changing tables.
 - Follow the UI-rules specified in `docs/UI-rules.md` as well as here before building UI
 
+## Supabase MCP
+
+- Whenever I ask you to do something related to Supabase you must know that you have MCP connection to my Supabase project. Do not ever leave SQL or any other actions for user to complete, you do it yourself. Only let user know if you can't accomplish a certain task using MCP.
+
 ## UI: shadcn/ui with preset `b7kBsBkh7b`
 
 This project's UI is built with shadcn/ui using preset `b7kBsBkh7b`. Its settings live in `components.json` (style `base-nova`, base color `zinc`, Remix icons, `inverted-translucent` menus, pointer cursor on buttons). Use it everywhere:

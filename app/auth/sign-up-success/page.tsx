@@ -1,0 +1,9 @@
+import type { Metadata } from "next"
+
+import { CheckEmail } from "@/components/auth/check-email"
+
+export const metadata: Metadata = { title: "Check your email" }
+
+export default function SignUpSuccessPage() {
+  return <CheckEmail />
+}

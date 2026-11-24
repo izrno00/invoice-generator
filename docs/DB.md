@@ -7,7 +7,7 @@
 | **Database** | Supabase Postgres (15+) |
 | **Related docs** | [PRD.md](PRD.md) · [Tech.md](Tech.md) |
 
-This document defines the data model, constraints, triggers, Row Level Security (RLS) and storage for the product described in [PRD.md](PRD.md). §9 contains the full SQL migration, which will be applied with the Supabase MCP `apply_migration` (`001_initial_schema`). **It hasn't been applied yet.**
+This document defines the data model, constraints, triggers, Row Level Security (RLS) and storage for the product described in [PRD.md](PRD.md). §9 contains the full SQL migration, applied with the Supabase MCP `apply_migration` (`001_initial_schema`). **Applied on 24 Nov 2026** (migration version `20261124174600`); the §9.1 checks passed.
 
 ---
 
