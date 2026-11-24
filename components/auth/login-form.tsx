@@ -1,7 +1,7 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { RiErrorWarningLine, RiMailLine } from "@remixicon/react"
+import { EnvelopeSimpleIcon, WarningCircleIcon } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -72,14 +72,14 @@ export function LoginForm() {
           <FieldGroup>
             {formError && (
               <Alert variant="destructive">
-                <RiErrorWarningLine />
+                <WarningCircleIcon />
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             )}
 
             {unconfirmedEmail && (
               <Alert>
-                <RiMailLine />
+                <EnvelopeSimpleIcon />
                 <AlertTitle>Confirm your email first</AlertTitle>
                 <AlertDescription>
                   <p>
