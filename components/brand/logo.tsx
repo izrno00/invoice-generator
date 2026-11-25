@@ -3,9 +3,18 @@ import { useId, type ComponentProps } from "react"
 import { cn } from "@/lib/utils"
 
 type LogoProps = Omit<ComponentProps<"svg">, "children" | "viewBox"> & {
-  /** `full` = icon + "Payable" wordmark, `mark` = icon only (square). */
-  variant?: "full" | "mark"
+  /**
+   * `full` = icon + "Payable" wordmark, `mark` = icon only (square),
+   * `wordmark` = "Payable" only, no icon.
+   */
+  variant?: "full" | "mark" | "wordmark"
 }
+
+const VIEW_BOXES = {
+  full: "255 185 1660 388",
+  mark: "255 179 400 400",
+  wordmark: "740 240 1175 293",
+} as const
 
 /**
  * Payable logo. Size it with a height class (e.g. `h-7`); the width follows.
@@ -23,46 +32,50 @@ export function Logo({ variant = "full", className, ...props }: LogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={variant === "mark" ? "255 179 400 400" : "255 185 1660 388"}
+      viewBox={VIEW_BOXES[variant]}
       role="img"
       aria-label="Payable"
       className={cn("h-8 w-auto shrink-0 text-foreground", className)}
       {...props}
     >
-      <defs>
-        <mask id={cutId} maskUnits="userSpaceOnUse" x={0} y={0} width={2000} height={800}>
-          <rect width={2000} height={800} fill="#fff" />
-          <circle cx={572} cy={490} r={93} fill="#000" />
-        </mask>
-        <linearGradient id={foldId} gradientUnits="userSpaceOnUse" x1={524} y1={187} x2={615} y2={293}>
-          <stop offset={0} stopColor={COLORS.foldLight} />
-          <stop offset={1} stopColor={COLORS.foldDark} />
-        </linearGradient>
-      </defs>
+      {variant !== "wordmark" && (
+        <>
+          <defs>
+            <mask id={cutId} maskUnits="userSpaceOnUse" x={0} y={0} width={2000} height={800}>
+              <rect width={2000} height={800} fill="#fff" />
+              <circle cx={572} cy={490} r={93} fill="#000" />
+            </mask>
+            <linearGradient id={foldId} gradientUnits="userSpaceOnUse" x1={524} y1={187} x2={615} y2={293}>
+              <stop offset={0} stopColor={COLORS.foldLight} />
+              <stop offset={1} stopColor={COLORS.foldDark} />
+            </linearGradient>
+          </defs>
 
-      {/* Document: drawn upright, then slanted 7.7° */}
-      <g mask={`url(#${cutId})`}>
-        <g transform="translate(0 373) skewX(-7.7) translate(0 -373)">
-          <path fill={COLORS.violet} fillRule="evenodd" d={DOCUMENT} />
-          <path fill={`url(#${foldId})`} d={FOLD} />
-        </g>
-      </g>
-      <rect x={360} y={314} width={197} height={29} rx={14.5} fill={COLORS.violet} />
-      <rect x={353} y={373} width={169} height={29} rx={14.5} fill={COLORS.violet} />
-      <rect x={346} y={432} width={127} height={29} rx={14.5} fill={COLORS.violet} />
+          {/* Document: drawn upright, then slanted 7.7° */}
+          <g mask={`url(#${cutId})`}>
+            <g transform="translate(0 373) skewX(-7.7) translate(0 -373)">
+              <path fill={COLORS.violet} fillRule="evenodd" d={DOCUMENT} />
+              <path fill={`url(#${foldId})`} d={FOLD} />
+            </g>
+          </g>
+          <rect x={360} y={314} width={197} height={29} rx={14.5} fill={COLORS.violet} />
+          <rect x={353} y={373} width={169} height={29} rx={14.5} fill={COLORS.violet} />
+          <rect x={346} y={432} width={127} height={29} rx={14.5} fill={COLORS.violet} />
 
-      {/* Check badge */}
-      <circle cx={572} cy={490} r={81} fill={COLORS.lime} />
-      <path
-        d="M533 496.5L556 516L610.5 465.5"
-        fill="none"
-        stroke="#fff"
-        strokeWidth={20.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+          {/* Check badge */}
+          <circle cx={572} cy={490} r={81} fill={COLORS.lime} />
+          <path
+            d="M533 496.5L556 516L610.5 465.5"
+            fill="none"
+            stroke="#fff"
+            strokeWidth={20.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
 
-      {variant === "full" && <path fill="currentColor" d={WORDMARK} />}
+      {variant !== "mark" && <path fill="currentColor" d={WORDMARK} />}
     </svg>
   )
 }

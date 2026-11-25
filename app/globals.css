@@ -47,6 +47,17 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Auth-page ribbons (components/auth/auth-ribbons.tsx): one full turn every two minutes. */
+@theme {
+  --animate-ribbon-spin: ribbon-spin 120s linear infinite;
+
+  @keyframes ribbon-spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+}
+
 :root {
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
