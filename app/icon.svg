@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="253 177 404 404">
+<defs>
+<mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="800"><rect width="2000" height="800" fill="#fff"/><circle cx="572" cy="490" r="93" fill="#000"/></mask>
+<linearGradient id="fold" gradientUnits="userSpaceOnUse" x1="524" y1="187" x2="615" y2="293"><stop offset="0" stop-color="#AE50FF"/><stop offset="1" stop-color="#9F3BFD"/></linearGradient>
+</defs>
+<g mask="url(#cut)"><g transform="translate(0 373) skewX(-7.7) translate(0 -373)">
+<path fill="#8D2AFA" fill-rule="evenodd" d="M353 187H524L635 293V500A60 60 0 0 1 575 560H361A88 88 0 0 1 273 472V267A80 80 0 0 1 353 187ZM356 227H519.85L593 293V478A40 40 0 0 1 553 518H362A46 46 0 0 1 316 472V267A40 40 0 0 1 356 227Z"/>
+<path fill="url(#fold)" d="M524 187L635 293H526Q513 293 514.35 280Z"/>
+</g></g>
+<rect x="360" y="314" width="197" height="29" rx="14.5" fill="#8D2AFA"/>
+<rect x="353" y="373" width="169" height="29" rx="14.5" fill="#8D2AFA"/>
+<rect x="346" y="432" width="127" height="29" rx="14.5" fill="#8D2AFA"/>
+<circle cx="572" cy="490" r="81" fill="#98DD23"/>
+<path d="M533 496.5L556 516L610.5 465.5" fill="none" stroke="#fff" stroke-width="20.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

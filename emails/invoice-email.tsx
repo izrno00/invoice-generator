@@ -61,7 +61,7 @@ export function InvoiceEmail({ message, invoiceNumber, total, dueDate, paymentUr
 
           <Text style={label}>The invoice is attached as a PDF.</Text>
           <Hr style={{ borderColor: "#e5e5e5", margin: "24px 0 16px" }} />
-          <Text style={label}>Sent via Invoice Generator</Text>
+          <Text style={label}>Sent via Payable</Text>
         </Container>
       </Body>
     </Html>

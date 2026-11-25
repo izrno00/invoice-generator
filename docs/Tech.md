@@ -1,4 +1,4 @@
-# Invoice Generator: Technical Architecture
+# Payable: Technical Architecture
 
 | | |
 |---|---|
@@ -123,7 +123,7 @@ flowchart LR
 
 ```
 app/
-  layout.tsx                      # root layout (fonts, <Toaster/>)
+  layout.tsx                      # root layout (fonts, <ThemeProvider>, <Toaster/>)
   globals.css                     # theme tokens (shadcn preset)
   (marketing)/
     page.tsx                      # landing (placeholder in v1)
@@ -167,7 +167,9 @@ app/
 
 components/
   ui/                             # shadcn components (generated, don't hand-edit unless needed)
-  app-shell/                      # app-header, main-nav, mobile-nav (sheet), nav-links,
+                                  # + animated-theme-toggle (21st.dev, uses motion)
+  theme-provider.tsx              # next-themes provider (dark default, Dark/Light)
+  app-shell/                      # app-header (+ theme toggle), main-nav, mobile-nav (sheet), nav-links,
                                   # nav-items (text-only items), nav-user (user menu)
   settings/                       # settings-nav, profile-form, payments-panel
   pay/                            # pay-panel (summary + Pay now, end states)
@@ -425,7 +427,7 @@ One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns pe
 4. Make sure the PDF is current (regenerate if `pdf_content_hash !== content_hash`). Download it from storage as a `Buffer`.
 5. **Payment link decision (in memory, nothing written yet)**, `decidePaymentLink()` in `actions.ts`: load `stripe_accounts` for the user and **check it live with Stripe** (`syncStripeAccount`, falls back to the stored flags if Stripe can't be reached). Include a link only if `charges_enabled` and `total_cents ≥ STRIPE_MINIMUM_CENTS[currency]` (`lib/stripe/payment-link.ts`: EUR 50, USD 75, GBP 50, BAM 100, chosen so the charge clears Stripe's minimum whatever currency the connected account settles in). If included, use the existing `payment_token`, or generate one (`lib/stripe/token.ts`: `randomBytes(24).toString('base64url')`) to build the link URL. The send dialog shows the same decision from the **stored** flag (`SendDetails.payment`), and the success toast says so if the live check removed the link.
 6. Render `emails/invoice-email.tsx` to HTML and plain text with `@react-email/render` (`lib/email/send-invoice.ts`), and call `sendEmail()` with `html` + `text`:
-   - `from`: `"<Sender name> via Invoice Generator <address from EMAIL_FROM>"` (strip `"`, `<`, `>` from the name),
+   - `from`: `"<Sender name> via Payable <address from EMAIL_FROM>"` (strip `"`, `<`, `>` from the name),
    - `replyTo`: profile email,
    - `to`: client email,
    - `subject`: `Invoice 2026-001 from <Sender name>`,
@@ -437,7 +439,7 @@ One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns pe
 
 ### 10.2 Template (`emails/invoice-email.tsx`)
 
-React Email components (check the exports of the installed `react-email` package). Content: the user's message (plain text, line breaks kept, **escaped**), a summary card (number, total, due date), a **Pay invoice** button linking to `${NEXT_PUBLIC_APP_URL}/pay/${payment_token}` when included, and a small footer ("Sent via Invoice Generator"). Simple inline-styled layout that works in all mail clients.
+React Email components (check the exports of the installed `react-email` package). Content: the user's message (plain text, line breaks kept, **escaped**), a summary card (number, total, due date), a **Pay invoice** button linking to `${NEXT_PUBLIC_APP_URL}/pay/${payment_token}` when included, and a small footer ("Sent via Payable"). Simple inline-styled layout that works in all mail clients.
 
 ### 10.3 Sender domain
 
@@ -567,7 +569,7 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public | Supabase publishable key | exists |
 | `SUPABASE_SECRET_KEY` | server | Admin client (webhook, pay page, Stripe account writes) | exists |
 | `RESEND_API_KEY` | server | Resend API | exists |
-| `EMAIL_FROM` | server | `Invoice Generator <invoices@your-domain>` on the verified domain | exists |
+| `EMAIL_FROM` | server | `Payable <invoices@your-domain>` on the verified domain | exists |
 | `STRIPE_SECRET_KEY` | server | Stripe platform secret key (`sk_test_…` / `sk_live_…`) | exists |
 | `STRIPE_WEBHOOK_SECRET` | server | Signing secret of the Connect webhook endpoint | **add** with the webhook |
 | `NEXT_PUBLIC_APP_URL` | public | Absolute base URL for email links and Stripe redirect URLs (`http://localhost:3000` locally) | exists (localhost until the domain is set up) |

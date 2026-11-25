@@ -20,7 +20,7 @@ describe("InvoiceEmail", () => {
     expect(html).toContain("EUR 1,234.56")
     expect(html).toContain("8 Dec 2026")
     expect(html).not.toContain("Pay invoice")
-    expect(toPlainText(html)).toContain("Sent via Invoice Generator")
+    expect(toPlainText(html)).toContain("Sent via Payable")
   })
 
   it("adds the Pay invoice button when there's a payment link", async () => {

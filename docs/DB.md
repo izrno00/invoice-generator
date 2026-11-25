@@ -1,4 +1,4 @@
-# Invoice Generator: Database Schema
+# Payable: Database Schema
 
 | | |
 |---|---|
@@ -411,7 +411,7 @@ Policies on `storage.objects` (all `to authenticated`, `bucket_id = 'invoice-pdf
 
 ```sql
 -- =====================================================================
--- 001_initial_schema: Invoice Generator
+-- 001_initial_schema: Payable
 -- =====================================================================
 
 create schema if not exists private;

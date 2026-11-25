@@ -2,9 +2,11 @@ import Link from "next/link"
 import { Suspense } from "react"
 
 import { MainNav } from "@/components/app-shell/main-nav"
+import { Logo } from "@/components/brand/logo"
 import { MobileNav } from "@/components/app-shell/mobile-nav"
 import { NavLinks } from "@/components/app-shell/nav-links"
 import { NavUser } from "@/components/app-shell/nav-user"
+import { AnimatedThemeToggle } from "@/components/ui/animated-theme-toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 import { requireUser } from "@/lib/dal/auth"
 
@@ -27,18 +29,19 @@ function UserMenuSkeleton() {
 export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background">
-      <div className="flex h-14 items-center gap-2 px-4 md:gap-6 md:px-6">
+      <div className="flex h-14 items-center gap-2 px-4 md:gap-6 md:px-6 lg:px-[100px]">
         <MobileNav />
         <Link
           href="/dashboard"
-          className="rounded-md font-heading text-base font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          Invoice Generator
+          <Logo className="h-7" />
         </Link>
         <Suspense fallback={<NavLinks className="hidden md:flex" />}>
           <MainNav className="hidden md:flex" />
         </Suspense>
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-4">
+          <AnimatedThemeToggle />
           <Suspense fallback={<UserMenuSkeleton />}>
             <UserMenu />
           </Suspense>

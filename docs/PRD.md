@@ -1,4 +1,4 @@
-# Invoice Generator: Product Requirements
+# Payable: Product Requirements
 
 | | |
 |---|---|
@@ -13,7 +13,7 @@ This document covers what the product does and how it behaves for the user and t
 
 ## 1. Overview
 
-Invoice Generator is a web app for **freelancers** to create, store and send invoices to their clients, and to get paid online.
+Payable is a web app for **freelancers** to create, store and send invoices to their clients, and to get paid online.
 
 From one place, a freelancer can:
 
@@ -386,7 +386,7 @@ Leaving the form with unsaved changes asks for confirmation ("Discard unsaved ch
 
 | Part | Content |
 |---|---|
-| From | `<Sender name> via Invoice Generator`, from the app's email address |
+| From | `<Sender name> via Payable`, from the app's email address |
 | Reply-to | The user's profile email (client replies go to the user) |
 | Subject | `Invoice 2026-001 from <Sender name>` |
 | Body | The user's message; a summary (invoice number, total, due date); a **Pay invoice** button (only when a payment link is included) |

@@ -37,10 +37,10 @@ describe("email texts", () => {
   })
 
   it("builds a safe From header", () => {
-    expect(emailAddressOf("Invoice Generator <invoices@example.com>")).toBe("invoices@example.com")
+    expect(emailAddressOf("Payable <invoices@example.com>")).toBe("invoices@example.com")
     expect(emailAddressOf("invoices@example.com")).toBe("invoices@example.com")
-    expect(invoiceFromHeader('Acme "Best" <Studio>', "Invoice Generator <invoices@example.com>")).toBe(
-      '"Acme Best Studio via Invoice Generator" <invoices@example.com>'
+    expect(invoiceFromHeader('Acme "Best" <Studio>', "Payable <invoices@example.com>")).toBe(
+      '"Acme Best Studio via Payable" <invoices@example.com>'
     )
   })
 })

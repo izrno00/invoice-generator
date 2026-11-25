@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react"
  * sessionStorage can be unavailable (private mode, blocked storage), so every
  * access is guarded and the screen works without it.
  */
-const KEY = "invoice-generator:pending-signup-email"
+const KEY = "payable:pending-signup-email"
 
 export function rememberPendingSignup(email: string) {
   try {

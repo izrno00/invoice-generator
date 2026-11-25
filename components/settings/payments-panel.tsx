@@ -145,7 +145,7 @@ export function PaymentsPanel({ state, returned }: { state: PaymentsState; retur
       <CardHeader>
         <CardTitle>Stripe</CardTitle>
         <CardDescription>
-          Money from card payments goes straight to your Stripe account. Invoice Generator takes no fee; Stripe&apos;s
+          Money from card payments goes straight to your Stripe account. Payable takes no fee; Stripe&apos;s
           processing fees apply.
         </CardDescription>
         <CardAction>

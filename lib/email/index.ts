@@ -20,7 +20,7 @@ function getDefaultFrom(): string {
   const from = process.env.EMAIL_FROM
   if (!from) {
     throw new Error(
-      'EMAIL_FROM is not set. Add it to .env.local, e.g. EMAIL_FROM="Invoice Generator <invoices@yourdomain.com>".'
+      'EMAIL_FROM is not set. Add it to .env.local, e.g. EMAIL_FROM="Payable <invoices@yourdomain.com>".'
     )
   }
   return from

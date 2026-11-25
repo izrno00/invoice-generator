@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 
 import { NavLinks } from "@/components/app-shell/nav-links"
+import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
@@ -27,7 +28,9 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left">
         <SheetHeader>
-          <SheetTitle>Invoice Generator</SheetTitle>
+          <SheetTitle>
+            <Logo className="h-7" />
+          </SheetTitle>
         </SheetHeader>
         <MobileNavLinks onNavigate={() => setOpen(false)} />
       </SheetContent>

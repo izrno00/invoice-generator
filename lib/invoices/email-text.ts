@@ -41,10 +41,10 @@ export function emailAddressOf(from: string): string {
 }
 
 /**
- * `"Acme Studio via Invoice Generator" <invoices@example.com>`. Characters
+ * `"Acme Studio via Payable" <invoices@example.com>`. Characters
  * that would break the header are removed from the user's name.
  */
 export function invoiceFromHeader(sender: string, emailFrom: string): string {
   const name = sender.replace(/["<>\\\r\n]/g, "").replace(/\s+/g, " ").trim()
-  return `"${name} via Invoice Generator" <${emailAddressOf(emailFrom)}>`
+  return `"${name} via Payable" <${emailAddressOf(emailFrom)}>`
 }
