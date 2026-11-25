@@ -250,7 +250,7 @@ Each feature lists user stories and **acceptance criteria (AC)**.
 
 **AC**
 1. **Clients list** shows display name, email, number of invoices and actions (view, edit, delete). Searchable by name, company or email.
-2. **Client details** shows all fields and a list of that client's invoices (same columns as the invoice list).
+2. **Client details** shows all fields and a list of that client's invoices (same columns and row actions as the invoice list, newest first, 20 per page, no filters), with a **View in invoices list** link that opens the invoice list filtered by this client.
 3. **Create / edit client:** a form with the fields above. Email must be a valid format when filled in.
 4. On the invoice form, the client is chosen from a **searchable dropdown**, which also has **+ Add new client**. That option opens a small form in a dialog and, after saving, selects the new client, without leaving the invoice.
 5. A client without an email can be put on invoices, but **Send** is disabled for those invoices, with the explanation "This client has no email address".
@@ -276,10 +276,10 @@ Each feature lists user stories and **acceptance criteria (AC)**.
 | To | Client dropdown (searchable, with "+ Add new client") |
 | Invoice Number | Read-only, assigned automatically on first save ("Assigned on save" before that) |
 | Invoice Date | Date picker. Default: **today** |
-| Due Date | Date picker. Default: **invoice date + 14 days**. Must be on or after the invoice date |
+| Due Date | Date picker. Default: **invoice date + 14 days**, and it follows the invoice date (+14 days) until the user picks a due date themselves. Must be on or after the invoice date |
 | Currency | EUR / USD / BAM / GBP. Default: the profile's default currency. One currency per invoice |
 
-**Line items** (at least one row when finalizing; rows can be added, removed and reordered)
+**Line items** (at least one row when finalizing, at most **100**; rows can be added, removed and moved up / down with buttons on each row). **Add line** starts the first row as Hours, quantity 1, VAT 0; later rows reuse the previous row's unit and VAT %.
 
 | Column | Behaviour |
 |---|---|
@@ -288,6 +288,8 @@ Each feature lists user stories and **acceptance criteria (AC)**.
 | Quantity | Whole number ≥ 1 for Hours. Locked to **1** for Flat |
 | Price | Unit price, before VAT, up to 2 decimals, ≥ 0 |
 | VAT % | Typed freely, 0–100, up to 2 decimals. Default **0** |
+
+Price and VAT % accept a dot or a comma as the decimal separator (`12.50` and `12,50` are the same). Thousands separators aren't accepted while typing.
 | Amount | Read-only: Quantity × Price (before VAT) |
 
 **Totals** (read-only, update live as the user types)
@@ -351,7 +353,7 @@ Leaving the form with unsaved changes asks for confirmation ("Discard unsaved ch
 4. Empty optional fields are left out (no empty labels).
 5. The PDF shows **no** payment link, **no** paid/unpaid status, **no** logo or branding.
 6. Text in any Latin-script language must render correctly, including characters like č, ć, š, ž, đ, ä, ö, ü, ß, é.
-7. Long content (many line items, long addresses or comments) flows onto more pages. The table header repeats on each page and page numbers appear in the footer ("Page 1 of 2").
+7. Long content (many line items, long addresses or comments) flows onto more pages. The table header repeats on each page and page numbers appear in the footer ("Page 1 of 2"). A one-page invoice has no page number.
 8. Size: A4.
 9. Download file name: `Invoice-2026-001.pdf`.
 
@@ -373,8 +375,8 @@ Leaving the form with unsaved changes asks for confirmation ("Discard unsaved ch
 | Element | Behaviour |
 |---|---|
 | To | The client's email (read-only) |
-| Subject | Fixed: `Invoice 2026-001 from <Sender name>` (read-only) |
-| Message | Pre-filled, **editable** text area. Default: *"Hi <Client name>, please find attached invoice 2026-001 for EUR 1,234.56, due on 8 Dec 2026. Thank you!"* |
+| Subject | Fixed: `Invoice 2026-001 from <Sender name>` (read-only). The sender name is the profile's Company Name, otherwise its Full Name |
+| Message | Pre-filled, **editable** text area. Default: *"Hi <Client name>, please find attached invoice 2026-001 for EUR 1,234.56, due on 8 Dec 2026. Thank you!"* The greeting uses the client's Full Name, otherwise the Company Name, otherwise just "Hi,". When resending an invoice whose PDF changed since the last send, it says *"the updated invoice 2026-001"* |
 | Payment link note | Either "A secure payment link will be included." or "No payment link will be included. Connect Stripe to let clients pay online." (with a link to Payments settings) |
 | Attachment | "Invoice-2026-001.pdf" |
 | Buttons | **Cancel**, **Send** |
@@ -452,7 +454,7 @@ The page a client reaches from the **Pay invoice** button. No login required.
    - Invoice date range: from / to
 5. **Search** by invoice number or client name / company.
 6. Filters, search and page are kept in the URL, so the view survives refresh and can be bookmarked. Changing a filter resets to page 1.
-7. **Row actions** depend on state (§5.2): View · Edit · Send/Resend · Download PDF · Duplicate · Mark as paid · Delete.
+7. **Row actions** depend on state (§5.2): Edit · Send/Resend · Download PDF · Duplicate · Mark as paid · Delete. There is no View item: clicking the invoice opens it.
 8. Clicking a row opens the invoice details.
 9. **Empty states:** no invoices yet ("Create your first invoice" button), and no results for the current filters ("No invoices match your filters", with "Clear filters").
 10. On small screens the table switches to a stacked card layout with the same information and actions.
@@ -469,7 +471,7 @@ The page a client reaches from the **Pay invoice** button. No login required.
 
 **AC**
 1. **Duplicate** creates a new **Draft** with the same client, currency, line items and comments.
-2. The copy gets a new invoice number, invoice date = today, due date = today + 14 days, and **fresh** sender and client details from the current profile and client.
+2. The copy gets a new invoice number, invoice date = today, due date = today + 14 days, and **fresh** sender and client details from the current profile and client. If the original's client was deleted, the copy keeps the client details saved on the original (shown as "(deleted client)", like a kept unpaid invoice).
 3. The copy has no sent dates, no payment link and no PDF. The user lands on its edit form.
 4. Works for invoices in any state, including Paid.
 

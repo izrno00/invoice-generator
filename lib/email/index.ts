@@ -26,11 +26,12 @@ function getDefaultFrom(): string {
   return from
 }
 
-export type SendEmailOptions = {
+/** A React Email template, or HTML already rendered from one (plus its plain-text version). */
+type EmailBody = { react: ReactNode; html?: never; text?: never } | { react?: never; html: string; text: string }
+
+export type SendEmailOptions = EmailBody & {
   to: string | string[]
   subject: string
-  /** React Email template, e.g. <InvoiceEmail invoice={invoice} /> */
-  react: ReactNode
   /** Overrides EMAIL_FROM for this email. */
   from?: string
   replyTo?: string | string[]

@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { Constants, type Database } from "@/lib/supabase/database.types"
+import { optionalEmail, optionalText, tooLong } from "@/lib/validation/fields"
 
 export type CurrencyCode = Database["public"]["Enums"]["currency_code"]
 
@@ -23,26 +24,6 @@ export const PROFILE_LIMITS = {
   vatId: 100,
   website: 500,
 } as const
-
-function tooLong(label: string, max: number) {
-  return `${label} must be at most ${max.toLocaleString("en-US")} characters`
-}
-
-/** Trimmed text where an empty field is stored as null. */
-function optionalText(label: string, max: number, { multiline = false } = {}) {
-  const text = multiline ? z.string().overwrite((value) => value.replace(/\r\n?/g, "\n")) : z.string()
-  return text
-    .trim()
-    .max(max, tooLong(label, max))
-    .transform((value) => value || null)
-}
-
-const optionalEmail = z
-  .string()
-  .trim()
-  .max(PROFILE_LIMITS.email, "Email address is too long")
-  .transform((value) => value || null)
-  .pipe(z.email("Enter a valid email address").nullable())
 
 const HAS_SCHEME = /^[a-z][a-z\d+.-]*:\/\//i
 
@@ -101,7 +82,7 @@ const optionalWebsite = z
 export const profileSchema = z.object({
   fullName: optionalText("Full name", PROFILE_LIMITS.fullName),
   companyName: optionalText("Company name", PROFILE_LIMITS.companyName),
-  email: optionalEmail,
+  email: optionalEmail(PROFILE_LIMITS.email),
   address: optionalText("Address", PROFILE_LIMITS.address, { multiline: true }),
   vatId: optionalText("VAT ID", PROFILE_LIMITS.vatId),
   website: optionalWebsite,

@@ -28,6 +28,10 @@ This document covers **how** the product in [PRD.md](PRD.md) gets built: stack, 
 | Supabase | `@supabase/ssr`, `@supabase/supabase-js` | 0.12 / 2.119 | Clients in `lib/client.ts`, `lib/server.ts`, `lib/middleware.ts` |
 | Email | `resend`, `react-email`, `@react-email/render` | 6.39 / 6.11 / 2.3 | `sendEmail()` helper in `lib/email/index.ts` |
 | Guard | `server-only` | | Marks server-only modules |
+| PDF | `@react-pdf/renderer` | 4.9.0 | Invoice PDFs (§9). In Next's built-in `serverExternalPackages` list |
+| Dates | `date-fns`, `react-day-picker` | 4.4.0 / 10.0.2 | Date maths; the shadcn Calendar behind the date pickers |
+| Forms | `zod`, `react-hook-form`, `@hookform/resolvers` | 4.6 / 7.92 / 7.0 | Shared schemas, shadcn Field + RHF pattern |
+| Tests | `vitest` (dev) | 4.1 | Unit tests next to the code they cover |
 | Language | TypeScript (strict), ESLint 9 + `eslint-config-next` | | Path alias `@/*` → project root |
 
 ### 1.2 To add
@@ -35,11 +39,6 @@ This document covers **how** the product in [PRD.md](PRD.md) gets built: stack, 
 | Package | Why |
 |---|---|
 | `stripe` | Stripe Node SDK: Connect onboarding, Checkout Sessions, webhook verification |
-| `@react-pdf/renderer` | Server-side PDF rendering from React components. No headless browser needed, so it works on Vercel serverless. It's already in Next's built-in `serverExternalPackages` list, so no config needed |
-| `zod` | Shared validation schemas for forms and Server Actions |
-| `react-hook-form`, `@hookform/resolvers` | Form state, following the shadcn form pattern (Field components + RHF + zod) |
-| `date-fns` | Date maths (due date + 14 days, month boundaries). Also comes in with the shadcn Calendar |
-| `vitest` (dev) | Unit tests for calculations, formatting, numbering helpers, validation |
 
 Install everything with exact versions and commit the lockfile.
 
@@ -116,6 +115,7 @@ flowchart LR
 | **Security of actions** | Treat every Server Action as a public HTTP endpoint: never trust IDs from the client without an ownership check (RLS handles it if the user-session client is used) | `02-guides/data-security.md` |
 | **Route Handlers** | Used only for: auth confirm (`GET`), PDF download (`GET`), Stripe webhook (`POST`, raw body) | `01-getting-started/15-route-handlers.md` |
 | **Partial prefetching** | Enabled. Keep the static shell meaningful so navigations feel instant | `02-guides/adopting-partial-prefetching.md` |
+| **`next.config.ts`** | `serverExternalPackages: ["@react-email/render"]`: React Email renders with `react-dom/server`, which throws when bundled for React Server Components (Server Actions), so it's loaded from `node_modules`. `outputFileTracingIncludes` adds `lib/pdf/fonts/*.ttf` to the `/invoices/**` and `/clients/**` routes: the PDF reads its fonts from disk, where file tracing can't see them | `05-config/01-next-config-js/output.md`, `serverExternalPackages.md` |
 
 ---
 
@@ -146,11 +146,12 @@ app/
       [id]/edit/page.tsx
       [id]/pdf/route.ts           # GET: stream PDF from storage
     clients/
-      page.tsx
-      actions.ts
+      page.tsx                    # list (searchParams: page, q)
+      actions.ts                  # save / delete summary / delete
       new/page.tsx
       [id]/page.tsx
       [id]/edit/page.tsx
+      [id]/not-found.tsx          # missing or someone else's client
     settings/
       profile/page.tsx
       payments/page.tsx           # Stripe Connect status + connect/continue
@@ -168,31 +169,46 @@ components/
                                   # nav-items (text-only items), nav-user (user menu)
   settings/                       # settings-nav, profile-form
   dashboard/                      # profile-banner
-  invoices/                       # invoice-form, line-items-editor, totals, status-badge,
-                                  # invoice-preview, send-dialog, resend-prompt, filters, table
-  clients/                        # client-form, client-combobox, delete-client-dialog
+  invoices/                       # invoice-form, line-items-editor (+ live totals), date-picker,
+                                  # status-badge, invoice-preview, invoice-actions (row menu,
+                                  # detail buttons), send-dialog, confirm-dialogs (mark paid,
+                                  # delete, resend prompt), invoices-filters, invoices-table,
+                                  # invoices-pagination, list-params, breadcrumb, deleted notice
+  clients/                        # client-form, client-fields, use-save-client, duplicate- and
+                                  # delete-client-dialog, add-client-dialog, client-combobox
+                                  # (for the invoice form), table, row/detail actions, search,
+                                  # pagination, list-params, breadcrumb, deleted notice
+  forms/                          # shared form helpers: unsaved-changes ("Discard changes?"),
+                                  # use-url-search (search as you type into `?q=`)
 
 emails/
   invoice-email.tsx               # React Email template
 
 lib/
   utils.ts                        # cn (existing)
+  is-navigation-error.ts          # a Server Action rejected because it redirected
   supabase/
     client.ts                     # browser client   (moved from lib/client.ts)
     server.ts                     # server client    (moved from lib/server.ts)
     proxy.ts                      # updateSession    (moved from lib/middleware.ts)
     admin.ts                      # secret-key client, server-only
     database.types.ts             # generated types
+    filters.ts                    # escaping user text in PostgREST filters (§8.4)
   dal/                            # server-only data access layer
     auth.ts                       # getUser(), requireUser()
     profile.ts  clients.ts  invoices.ts  stripe-accounts.ts  dashboard.ts
-  invoices/
+  invoices/                       # pure, no I/O, unit tested
     calc.ts                       # pure totals maths (shared client + server)
-    format.ts                     # formatDate, formatMoney, formatQuantity
-    content-hash.ts               # hash of PDF-relevant content
+    money.ts                      # typed price / VAT / quantity → cents / basis points
+    format.ts                     # formatDate, formatMoney, formatQuantity, formatVatRate
+    dates.ts                      # local today, + 14 days
+    content-hash.ts               # hash of PDF-relevant content (node:crypto)
     snapshot.ts                   # profile/client → snapshot columns
-    status.ts                     # isOverdue, allowedActions(invoice)
+    document.ts                   # stored row + items → PDF/preview data, form values
+    names.ts  email-text.ts       # sender / greeting names, subject, default message, From header
+    status.ts                     # isOverdue, allowedActions(invoice), status filters
   validation/
+    fields.ts                     # shared zod fields (optional text / email)
     profile.ts  client.ts  invoice.ts   # zod schemas (draft vs final), send schema
     *.test.ts                     # Vitest unit tests next to the schema they cover
   pdf/
@@ -205,8 +221,8 @@ lib/
     checkout.ts                   # create/expire Checkout Sessions
     webhook.ts                    # event handlers
   email/
-    index.ts                      # sendEmail() (existing)
-    send-invoice.ts               # compose + send invoice email, log result
+    index.ts                      # sendEmail() (a React element, or rendered html + text)
+    send-invoice.ts               # render the invoice email and send it
 
 proxy.ts                          # root proxy → lib/supabase/proxy.ts
 vitest.config.mts                 # unit tests (node env, "@/…" alias from tsconfig)
@@ -351,9 +367,9 @@ Details:
 
 - **Snapshots** (`lib/invoices/snapshot.ts`): on create, copy the profile into `sender_*` and the selected client into `client_*`. On update, re-copy **only** if the user clicked *Refresh details* or picked a different client.
 - **Atomic write:** the invoice row and its line items are saved through **one RPC**, `save_invoice(p_invoice jsonb, p_items jsonb)` (`security invoker`, so RLS applies). It inserts or updates the invoice and **replaces** all line items in one transaction, so a failure can't leave half-saved items. Items carry `position` (0…n-1) for ordering. See [DB.md](DB.md) §4.
-- **content_hash** (`lib/invoices/content-hash.ts`): SHA-256 over a canonical JSON of everything that appears on the PDF (number, dates, currency, sender/client snapshots, lines, totals, comments). Two uses:
+- **content_hash** (`lib/invoices/content-hash.ts`): SHA-256 over a canonical JSON of everything that appears on the PDF (dates, currency, sender/client snapshots, lines, comments; totals follow from the lines). The **invoice number is left out**: the insert trigger assigns it after the hash is computed, and it never changes afterwards, so it can't make two versions of an invoice differ. Two uses:
   - skip PDF regeneration when `content_hash === pdf_content_hash`,
-  - `needsResendPrompt = first_sent_at != null && content_hash !== last_sent_content_hash`.
+  - `needsResendPrompt = first_sent_at != null && content_hash changed in this save && content_hash !== last_sent_content_hash` (saving again without changes doesn't ask again, PRD §6.8 AC4). The form then opens the details page with `?resend=1`, which shows the prompt and drops the parameter.
 - **PDF failure:** the invoice save still succeeds. `pdf_content_hash` stays stale. Download/Send detect `pdf_content_hash !== content_hash` and regenerate before continuing.
 
 ### 8.3 Other actions (`app/(app)/invoices/actions.ts`)
@@ -384,8 +400,8 @@ One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns pe
 | Item | Implementation |
 |---|---|
 | Library | `@react-pdf/renderer`: `renderToBuffer(<InvoiceDocument data={…} />)` in Server Actions / route handlers (Node.js runtime, the default) |
-| Component | `lib/pdf/invoice-document.tsx`: `<Document><Page size="A4">` with the sections in the order from PRD §6.6. Line items header uses `fixed` so it repeats. Footer uses `render={({ pageNumber, totalPages }) => …}` for "Page X of Y" |
-| Fonts | **Register a TTF with Latin Extended glyphs** (e.g. Geist or Inter static TTFs in `lib/pdf/fonts/`, loaded with `Font.register` from an absolute path built from `process.cwd()`). The built-in Helvetica can't render č/ć/đ/š/ž. Disable hyphenation (`Font.registerHyphenationCallback(w => [w])`) |
+| Component | `lib/pdf/invoice-document.tsx`: `<Document><Page size="A4">` with the sections in the order from PRD §6.6. Line items header uses `fixed` so it repeats. Footer uses `render={({ pageNumber, totalPages }) => …}` for "Page X of Y". `InvoiceDocument({ data })` returns the `<Document>` element itself, which is what `renderToBuffer` is typed to take |
+| Fonts | **Inter** 4.1 static TTFs (Regular, SemiBold, Bold; OFL, licence in `lib/pdf/fonts/OFL.txt`), registered with `Font.register` from an absolute path built from `process.cwd()` and traced into deployments by `outputFileTracingIncludes` (§3). The built-in Helvetica can't render č/ć/đ/š/ž. Hyphenation is off (`Font.registerHyphenationCallback(w => [w])`). "Page X of Y" is only printed when there are 2+ pages |
 | Data | The component receives a plain DTO (snapshots, lines with computed amounts, VAT breakdown, totals) plus `format.ts` helpers. **No DB access inside the component** |
 | Storage | Private bucket `invoice-pdfs`, object key `{user_id}/{invoice_id}.pdf`, uploaded with `upsert: true` and `contentType: 'application/pdf'` using the **user-session** client (storage RLS applies) |
 | Download | `app/(app)/invoices/[id]/pdf/route.ts` (`GET`): requireUser → load invoice (RLS) → regenerate if stale → `storage.download(path)` → `new Response(body, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="Invoice-2026-001.pdf"' } })` |
@@ -402,14 +418,14 @@ One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns pe
 2. Load the invoice (RLS). Reject if `paid`. If `draft`, run the final schema and **finalize** first (status → `unpaid`, generate PDF).
 3. Check preconditions: client email present, profile has (name or company) and email.
 4. Make sure the PDF is current (regenerate if `pdf_content_hash !== content_hash`). Download it from storage as a `Buffer`.
-5. **Payment link decision (in memory, nothing written yet):** load `stripe_accounts` for the user. Include a link only if `charges_enabled` and `total_cents ≥ Stripe minimum` for the currency. If included, use the existing `payment_token`, or generate one (`crypto.randomBytes(24).toString('base64url')`) to build the link URL.
-6. Render `emails/invoice-email.tsx` and call the existing `sendEmail()`:
+5. **Payment link decision (in memory, nothing written yet).** *Until Milestone 7 (Stripe) ships, `paymentLinkFor()` in `actions.ts` always returns null: every user counts as "not connected", emails have no Pay button and the dialog shows the "No payment link" note as plain text (no link to Payments settings yet).* Then: load `stripe_accounts` for the user. Include a link only if `charges_enabled` and `total_cents ≥ Stripe minimum` for the currency. If included, use the existing `payment_token`, or generate one (`crypto.randomBytes(24).toString('base64url')`) to build the link URL.
+6. Render `emails/invoice-email.tsx` to HTML and plain text with `@react-email/render` (`lib/email/send-invoice.ts`), and call `sendEmail()` with `html` + `text`:
    - `from`: `"<Sender name> via Invoice Generator <address from EMAIL_FROM>"` (strip `"`, `<`, `>` from the name),
    - `replyTo`: profile email,
    - `to`: client email,
    - `subject`: `Invoice 2026-001 from <Sender name>`,
    - `attachments: [{ filename: 'Invoice-2026-001.pdf', content: pdfBuffer }]`,
-   - `idempotencyKey: \`invoice-send/${invoiceId}/${attemptId}\`` (the dialog generates `attemptId` once when it opens and **reuses** it on Retry, so double clicks and retries never send twice).
+   - `idempotencyKey: \`invoice-send/${invoiceId}/${attemptId}\`` (the dialog generates `attemptId` on the first Send and **reuses** it on Retry, so double clicks and retries never send twice. Editing the message starts a new attempt, because Resend rejects a reused key with a different body).
 7. Insert a row into `invoice_emails` (status `sent`/`failed`, Resend id or error).
 8. **On success**, in one update: `first_sent_at` (if null), `last_sent_at = now()`, `last_sent_content_hash = content_hash`, and, if a link was included, `payment_token`, `payment_amount_cents = total_cents`, `payment_currency = currency`. If the amount changed and an open Checkout Session exists, **expire** it, so the client's next click charges the new amount. Return `{ ok: true }`.
 9. **On failure:** return `{ ok: false, error }`. The dialog shows the error + **Retry**. No payment fields were written, so a failed send never changes what the existing link charges.

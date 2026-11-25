@@ -19,6 +19,7 @@ export type Database = {
           address: string | null
           company_name: string | null
           created_at: string
+          display_name: string | null
           email: string | null
           full_name: string | null
           id: string
@@ -30,6 +31,7 @@ export type Database = {
           address?: string | null
           company_name?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
@@ -41,6 +43,7 @@ export type Database = {
           address?: string | null
           company_name?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
@@ -406,6 +409,14 @@ export type Database = {
           overdue_cents: number
           overdue_count: number
           paid_this_month_cents: number
+        }[]
+      }
+      delete_client: {
+        Args: { p_client_id: string; p_delete_unpaid?: boolean }
+        Returns: {
+          invoice_id: string
+          pdf_path: string
+          stripe_checkout_session_id: string
         }[]
       }
       save_invoice: {

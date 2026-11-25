@@ -7,7 +7,12 @@
 | **Database** | Supabase Postgres (15+) |
 | **Related docs** | [PRD.md](PRD.md) · [Tech.md](Tech.md) |
 
-This document defines the data model, constraints, triggers, Row Level Security (RLS) and storage for the product described in [PRD.md](PRD.md). §9 contains the full SQL migration, applied with the Supabase MCP `apply_migration` (`001_initial_schema`). **Applied on 24 Nov 2026** (migration version `20261124174600`); the §9.1 checks passed.
+This document defines the data model, constraints, triggers, Row Level Security (RLS) and storage for the product described in [PRD.md](PRD.md). §9 and §10 contain the SQL migrations, applied with the Supabase MCP `apply_migration`:
+
+| Migration | Version | Applied | Checks |
+|---|---|---|---|
+| `001_initial_schema` (§9) | `20261124174600` | 24 Nov 2026 | §9.1 passed |
+| `002_clients` (§10) | `20261125013433` | 25 Nov 2026 | §10.1 passed |
 
 ---
 
@@ -48,6 +53,7 @@ erDiagram
         text email
         text address
         text vat_id
+        text display_name "generated"
     }
     INVOICES {
         uuid id PK
@@ -175,9 +181,12 @@ The user's connected Stripe account. **Users can read their own row. Only the se
 | `email` | `text` | ✓ | | ≤ 320. Needed to send invoices |
 | `address` | `text` | ✓ | | ≤ 2,000 |
 | `vat_id` | `text` | ✓ | | ≤ 100 |
+| `display_name` | `text` | ✓ | generated | **Generated, stored:** first non-blank of company name → full name → email (PRD §6.4). Null if the client only has an address or VAT ID (the app shows "Unnamed client"). Used to sort and label clients; can't be written |
 | `created_at`, `updated_at` | `timestamptz` | | `now()` | |
 
 **Check:** at least one of the five data fields is non-blank (PRD §6.4).
+
+The database collation (`en_US.UTF-8`) already sorts case-insensitively, so lists use a plain `order by display_name`.
 
 ### 3.4 `invoices`
 
@@ -316,6 +325,7 @@ Not exposed. Only touched by the numbering trigger.
 | `private.protect_invoice_items()` | trigger fn on `invoice_items` **before insert/update/delete** | invoker | Rejects any change when the parent invoice is `paid`. `invoice_id` is immutable |
 | `public.save_invoice(p_invoice jsonb, p_items jsonb)` | RPC | **invoker** (RLS applies) | Creates or updates an invoice (status `draft` or `unpaid` only) and **replaces** its line items in one transaction. Returns the invoice row |
 | `public.dashboard_summary()` | RPC | **invoker** (RLS applies) | Per currency: `outstanding_count`, `outstanding_cents`, `overdue_count`, `overdue_cents`, `paid_this_month_cents` (by `paid_currency`, current UTC month) |
+| `public.delete_client(p_client_id uuid, p_delete_unpaid boolean default false)` | RPC | **invoker** (RLS applies) | Deletes a client in one transaction. With `p_delete_unpaid`, first deletes its `draft` / `unpaid` invoices and **returns** their `invoice_id`, `pdf_path`, `stripe_checkout_session_id` so the app can clean up. Other invoices (all paid ones) are kept and the FK clears their `client_id`. Raises `P0002` if the client doesn't exist or isn't the caller's |
 
 > **Note on deleting users:** because paid invoices can't be deleted, deleting an `auth.users` row that owns paid invoices fails (the cascade hits the paid-lock trigger). That's acceptable because account deletion is out of scope (PRD §3.2). If it's needed later, add an explicit bypass to `protect_invoice` (e.g. a transaction-local setting that only a server-side "delete account" function sets).
 
@@ -348,7 +358,7 @@ RLS is **enabled on every table in `public`**. All policies target `to authentic
 
 Paid-lock rules aren't in the policies. They're in triggers (§4), so they also apply to the secret-key client.
 
-**Grants:** `anon` has nothing. `authenticated` gets exactly the privileges matching the policies above (e.g. `select` only on `stripe_accounts`; `update(full_name, company_name, email, address, vat_id, website, default_currency)` on `profiles`). `service_role` gets full access to app tables.
+**Grants:** `anon` has nothing. `authenticated` gets exactly the privileges matching the policies above (e.g. `select` only on `stripe_accounts`; `update(full_name, company_name, email, address, vat_id, website, default_currency)` on `profiles`). `service_role` gets full access to app tables. RPC functions: `execute` is revoked from `public` and `anon` and granted to `authenticated` (`save_invoice`, `dashboard_summary`, `delete_client`).
 
 ---
 
@@ -357,6 +367,7 @@ Paid-lock rules aren't in the policies. They're in triggers (§4), so they also 
 | Table | Index | Purpose |
 |---|---|---|
 | `clients` | `(user_id)` | RLS + list |
+| `clients` | `(user_id, display_name, created_at)` | List sorted A→Z + pagination |
 | `invoices` | **unique** `(user_id, invoice_number)` | Numbering integrity |
 | `invoices` | `(user_id, invoice_date desc, created_at desc)` | Default list sort + pagination |
 | `invoices` | `(user_id, status, due_date)` | Status / overdue filters, dashboard |
@@ -1126,3 +1137,67 @@ Run these with `execute_sql` / `get_advisors` after applying:
 6. `select * from public.dashboard_summary()` returns correct per-currency numbers.
 7. Upload/download a PDF as user A at `A/…`. User B can't read it.
 8. Regenerate TypeScript types into `lib/supabase/database.types.ts`.
+
+---
+
+## 10. SQL migration: `002_clients`
+
+```sql
+-- Display name for sorting and listing (PRD §6.4: Company → Full name → Email)
+alter table public.clients
+  add column display_name text generated always as (
+    coalesce(
+      nullif(btrim(company_name), ''),
+      nullif(btrim(full_name), ''),
+      nullif(btrim(email), '')
+    )
+  ) stored;
+
+create index clients_user_id_display_name_idx
+  on public.clients (user_id, display_name, created_at);
+
+-- ---------------------------------------------------------------------
+-- RPC: delete a client, optionally with its Draft / Not paid invoices,
+-- in one transaction. Paid invoices are kept: the FK clears client_id.
+-- Returns the deleted invoices so the app can clean up PDFs and checkouts.
+-- ---------------------------------------------------------------------
+create or replace function public.delete_client(p_client_id uuid, p_delete_unpaid boolean default false)
+returns table (invoice_id uuid, pdf_path text, stripe_checkout_session_id text)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  -- RLS limits this to the caller's own clients. The lock also blocks new
+  -- invoices for this client until the transaction ends.
+  perform 1 from public.clients c where c.id = p_client_id for update;
+  if not found then
+    raise exception 'client not found' using errcode = 'P0002';
+  end if;
+
+  if p_delete_unpaid then
+    return query
+      delete from public.invoices i
+       where i.client_id = p_client_id
+         and i.status in ('draft', 'unpaid')
+      returning i.id, i.pdf_path, i.stripe_checkout_session_id;
+  end if;
+
+  delete from public.clients c where c.id = p_client_id;
+end;
+$$;
+
+revoke execute on function public.delete_client(uuid, boolean) from public, anon;
+grant  execute on function public.delete_client(uuid, boolean) to authenticated;
+```
+
+### 10.1 Post-migration checks
+
+Run in a transaction that rolls back, as two simulated users (`set local role authenticated` + `request.jwt.claims`):
+
+1. `display_name` follows company → full name → email, is null when all three are blank, and sorts case-insensitively.
+2. User B can't see, update or delete user A's clients, and `delete_client` on one raises `P0002`. So does a missing id.
+3. `delete_client(id)` keeps paid, unpaid and draft invoices (`client_id` null, snapshot intact).
+4. `delete_client(id, true)` removes and returns the draft and unpaid invoices; the paid one survives.
+5. `anon` can't execute the function.
+6. `get_advisors` reports nothing new; types are regenerated.
