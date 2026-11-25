@@ -136,7 +136,7 @@ app/
     error/page.tsx
     confirm/route.ts              # GET: verifyOtp(token_hash, type) → redirect
   (app)/
-    layout.tsx                    # app shell: sidebar + header (session read inside Suspense)
+    layout.tsx                    # app shell: header (session read inside Suspense)
     dashboard/page.tsx
     invoices/
       page.tsx                    # list (searchParams: page, status, client, from, to, q)
@@ -164,7 +164,10 @@ app/
 
 components/
   ui/                             # shadcn components (generated, don't hand-edit unless needed)
-  app-shell/                      # sidebar, header, user menu
+  app-shell/                      # app-header, main-nav, mobile-nav (sheet), nav-links,
+                                  # nav-items (text-only items), nav-user (user menu)
+  settings/                       # settings-nav, profile-form
+  dashboard/                      # profile-banner
   invoices/                       # invoice-form, line-items-editor, totals, status-badge,
                                   # invoice-preview, send-dialog, resend-prompt, filters, table
   clients/                        # client-form, client-combobox, delete-client-dialog
@@ -191,6 +194,7 @@ lib/
     status.ts                     # isOverdue, allowedActions(invoice)
   validation/
     profile.ts  client.ts  invoice.ts   # zod schemas (draft vs final), send schema
+    *.test.ts                     # Vitest unit tests next to the schema they cover
   pdf/
     invoice-document.tsx          # @react-pdf/renderer layout
     render.ts                     # renderToBuffer + upload to storage
@@ -205,6 +209,7 @@ lib/
     send-invoice.ts               # compose + send invoice email, log result
 
 proxy.ts                          # root proxy → lib/supabase/proxy.ts
+vitest.config.mts                 # unit tests (node env, "@/…" alias from tsconfig)
 ```
 
 **Housekeeping in the first milestone**
@@ -223,7 +228,7 @@ proxy.ts                          # root proxy → lib/supabase/proxy.ts
 | UI | Use the Supabase UI block `password-based-auth-nextjs` from the `@supabase` registry already set in `components.json` (`npx shadcn@latest add @supabase/password-based-auth-nextjs`), then restyle with the project's shadcn components. It provides the pages listed in §4. *Verify* the block's current file layout, because it may write its own client files: keep only one set of clients in `lib/supabase/` |
 | Confirm / reset links | Email templates point to `/auth/confirm?token_hash={{ .TokenHash }}&type=email` (signup) and `type=recovery` (reset). The route handler calls `supabase.auth.verifyOtp({ type, token_hash })` and redirects to `next` (`/dashboard` or `/auth/update-password`) |
 | Session | Cookie-based via `@supabase/ssr`. `proxy.ts` refreshes it on each request (`getClaims()`) |
-| Server check | `lib/dal/auth.ts`: `getUser()` returns the user or null. `requireUser()` redirects to `/auth/login?next=…`. Both are wrapped in React `cache()` for per-request dedupe. Use `supabase.auth.getClaims()` (verifies the JWT), never `getSession()` for authorization |
+| Server check | `lib/dal/auth.ts`: `getUser()` returns the user or null. `requireUser()` redirects to `/auth/login?next=…`. Both are wrapped in React `cache()` for per-request dedupe. Use `supabase.auth.getClaims()` (verifies the JWT), never `getSession()` for authorization. `getUser()` starts with `await io()` (`next/cache`): with partial prefetching `cookies()` resolves during the session's App Shell prerender, and `getClaims()` reads `Date.now()`, which Next.js rejects there |
 | Auth emails | Supabase → Auth → SMTP settings: **custom SMTP via Resend** (`smtp.resend.com`, port 465, user `resend`, password = a Resend API key, sender on the verified domain). The default Supabase SMTP is rate-limited and may only deliver to team members |
 | Redirect URLs | Supabase Auth → URL configuration: Site URL = production URL; allowed redirects: `http://localhost:3000/**`, the production URL, and Vercel preview URLs (`https://*-<team>.vercel.app/**`) |
 | Profile row | Created automatically by a DB trigger on `auth.users` insert, with email pre-filled (see [DB.md](DB.md)) |
@@ -510,7 +515,7 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 
 | Need | shadcn component(s) |
 |---|---|
-| App shell | `sidebar`, `breadcrumb`, `dropdown-menu`, `avatar`, `separator`, `sheet` (mobile) |
+| App shell | Header with text-only nav links, `dropdown-menu` + `avatar` (user menu), `sheet` (mobile menu), `breadcrumb` |
 | Forms | `field`, `input`, `textarea`, `label`, `select`, `combobox` (client picker), `calendar` + `popover` (date picker), `button`, `checkbox` |
 | Lists | `table`, `pagination`, `badge`, `dropdown-menu` (row actions), `input` (search), `empty` |
 | Feedback | `sonner` (toasts), `skeleton` (Suspense fallbacks), `alert` (banners), `spinner` |
@@ -519,7 +524,7 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 
 - **Line items editor:** `react-hook-form` `useFieldArray`. Totals recomputed with `calculateInvoice()` on every change (`useWatch`). On mobile, each line becomes a stacked card.
 - **Status badge:** Draft = outline, Not paid = secondary, Paid = default/success token, Overdue = destructive. Use tokens, not hard-coded colours.
-- **Responsive:** tables collapse to cards below `md`. Sidebar becomes a sheet. Dialogs become full-width on small screens. Minimum supported width 360 px.
+- **Responsive:** tables collapse to cards below `md`. Header nav moves into a sheet below `md`. Dialogs become full-width on small screens. Minimum supported width 360 px.
 - **Pending states:** buttons show a spinner and are disabled while an action runs (`useActionState` / `useTransition`).
 
 ---

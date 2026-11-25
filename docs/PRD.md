@@ -591,7 +591,7 @@ These formats are fixed and not configurable per user.
 
 ### 11.2 App (logged in)
 
-Main navigation (sidebar on desktop, menu on mobile): **Dashboard · Invoices · Clients · Settings**, plus the user menu (email, Log out).
+Main navigation (header on desktop, menu on mobile), text only with no icons: **Dashboard · Invoices · Clients · Settings**, plus the user menu (email, Log out).
 
 | Screen | Purpose |
 |---|---|

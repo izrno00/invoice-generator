@@ -1,5 +1,6 @@
 import "server-only"
 
+import { io } from "next/cache"
 import { redirect } from "next/navigation"
 import { cache } from "react"
 
@@ -15,6 +16,11 @@ export type SessionUser = {
  * (never trust getSession() for authorization). Deduped per request.
  */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
+  // With partial prefetching, cookies() resolves while Next.js prerenders the
+  // session's App Shell, and getClaims() then reads Date.now() to check the
+  // token's expiry. io() keeps this read out of every prerender; during a
+  // real request (and in Server Actions) it resolves immediately.
+  await io()
   const supabase = await createClient()
   const { data, error } = await supabase.auth.getClaims()
   if (error || !data?.claims) return null
