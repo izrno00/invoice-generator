@@ -223,9 +223,10 @@ Each feature lists user stories and **acceptance criteria (AC)**.
 **AC**
 1. The settings area has a **Payments** section showing one of these states:
    - **Not connected:** a **Connect Stripe** button,
-   - **Setup incomplete:** a **Continue setup** button (the user started but hasn't finished Stripe onboarding),
-   - **Connected:** a "Payments enabled" status and a link to open the user's Stripe dashboard.
-2. Connecting takes the user through Stripe's own onboarding and back to the app.
+   - **Setup incomplete:** a **Continue setup** button (the user started but hasn't finished Stripe onboarding). When the user has submitted everything but Stripe hasn't enabled card payments yet, it says "Stripe is reviewing your details or needs more information",
+   - **Connected:** a "Payments enabled" status, the connected account's name (or email), and a link to open the user's Stripe dashboard.
+   After returning from Stripe's onboarding, a toast says "Stripe connected" or "Setup not finished yet".
+2. **Connect Stripe** first asks where the user's business is based (a country select of the countries Stripe supports, default Croatia; Stripe needs the country to create the account and it can't be changed later). Then it takes the user through Stripe's own onboarding, which asks for all other details, and back to the app. **Continue setup** goes straight to Stripe.
 3. Money from client payments goes directly into the user's Stripe account. **The app takes no fee.** Stripe's processing fees are paid by the user (through their Stripe account).
 4. Only **card** payments are offered to clients.
 5. Users can create, save **and send** invoices without connecting Stripe. Invoices sent while Stripe isn't connected contain **no payment link**, and the send dialog says so ("No payment link will be included. Connect Stripe to let clients pay online.").
@@ -397,8 +398,9 @@ Leaving the form with unsaved changes asks for confirmation ("Discard unsaved ch
 3. **On failure** the dialog stays open, shows a short error ("We couldn't send the email. Please try again.") and a **Retry** button. The message text the user wrote is kept. Nothing is recorded as sent.
 4. Double-clicking or retrying never sends the same email twice.
 5. The payment link is included **only** if the user's Stripe account is connected and able to accept payments at the moment of sending.
-6. If the invoice total is below Stripe's minimum chargeable amount for that currency, the email is sent without a payment link and the dialog says so.
+6. If the invoice total is below Stripe's minimum chargeable amount for that currency, the email is sent without a payment link and the dialog says so ("No payment link will be included: online payments need at least EUR 0.50."). The minimums are EUR 0.50, USD 0.75, GBP 0.50 and BAM 1.00, so a charge works whichever currency the user's Stripe account settles in.
 7. When a payment link is included, the payment amount is set to the invoice total **at the time of this send** (see §6.9).
+8. The dialog shows "A secure payment link will be included." when it will be. If Stripe stops accepting payments for the account between opening the dialog and sending, the email goes without a link and the toast says so.
 
 ### 6.8 Resend flow
 
@@ -419,9 +421,10 @@ The page a client reaches from the **Pay invoice** button. No login required.
 
 **AC**
 1. **Pay now** takes the client to a secure Stripe card checkout for exactly that amount and currency. The client's email is pre-filled when known.
-2. After a successful payment the client sees a "Thank you, your payment was received" page, and the invoice becomes **Paid** automatically within moments. No emails are sent.
-3. If the client cancels at Stripe, they return to the pay page and can try again.
-4. Page states:
+2. After a successful payment the client sees a "Thank you, your payment was received" page with the invoice number and the amount paid, and the invoice becomes **Paid** automatically within moments. No emails are sent. *(Interim: the automatic Paid status arrives with the Stripe webhook, which waits for a verified domain. Until then an online payment doesn't change the invoice's status, but the pay page already shows "This invoice has been paid" and offers no second payment.)*
+3. If the client cancels at Stripe, they return to the pay page, which says "Payment cancelled. You can try again."
+4. Clicking **Pay now** again while an earlier checkout for the same amount is still open reopens that checkout. A checkout stays open for one hour. Stripe's checkout page uses the client's browser language.
+5. Page states:
 
 | Situation | What the client sees |
 |---|---|
@@ -430,13 +433,13 @@ The page a client reaches from the **Pay invoice** button. No login required.
 | Invoice deleted, or link invalid | "This payment link is no longer valid. Please contact the sender." |
 | Sender's Stripe account can no longer accept payments | "Online payment is currently unavailable. Please contact the sender." |
 
-5. Any successful payment through the link marks the invoice Paid, **even if the user has edited the amount since the last send**. Paying twice isn't possible: opening a new checkout cancels the previous unfinished one, and paid invoices don't offer a pay button.
-6. The pay page shows no other data about the user or their account. It can't be found except through the link.
+6. Any successful payment through the link marks the invoice Paid, **even if the user has edited the amount since the last send**. Paying twice isn't possible: opening a new checkout cancels the previous unfinished one, and paid invoices don't offer a pay button.
+7. The pay page shows no other data about the user or their account. It can't be found except through the link.
 
 ### 6.10 Invoice status changes
 
 **AC**
-1. **Automatic:** when Stripe confirms a successful payment, the invoice becomes Paid. This must be reliable, so a confirmation that arrives more than once or late still results in exactly one status change.
+1. **Automatic:** when Stripe confirms a successful payment, the invoice becomes Paid. This must be reliable, so a confirmation that arrives more than once or late still results in exactly one status change. *(Ships with the Stripe webhook, after the domain is verified; see §6.9 AC2.)*
 2. **Manual:** **Mark as paid** (Not paid invoices only) opens a confirmation: *"Mark invoice 2026-001 as paid? This can't be undone. The invoice will be locked and the client's payment link will stop accepting payments."* Confirming sets the invoice to Paid.
 3. Paid invoices can't be changed back to Not paid, by the user or anyone else.
 4. The paid date isn't displayed in the invoice UI. It's used only for the Dashboard's "Paid this month" figure.

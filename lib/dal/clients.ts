@@ -4,6 +4,7 @@ import { cache } from "react"
 import { z } from "zod"
 
 import { requireUser } from "@/lib/dal/auth"
+import { expireInvoiceCheckouts } from "@/lib/dal/stripe-accounts"
 import type { Database } from "@/lib/supabase/database.types"
 import { containsAnyOf, escapeIlike, quoteFilterValue } from "@/lib/supabase/filters"
 import { createClient } from "@/lib/supabase/server"
@@ -290,8 +291,8 @@ export async function deleteClient(id: string, deleteUnpaid: boolean): Promise<b
     if (storageError) console.error(`Couldn't delete invoice PDFs: ${storageError.message}`)
   }
 
-  // TODO (Milestone 7, Stripe): expire the returned `stripe_checkout_session_id`s
-  // on the user's connected account.
+  // Their payment links are gone with the rows; cancel any unfinished checkouts too.
+  await expireInvoiceCheckouts(data.map((invoice) => invoice.stripe_checkout_session_id))
 
   return true
 }

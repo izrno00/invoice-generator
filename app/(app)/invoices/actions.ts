@@ -18,11 +18,12 @@ import {
   type SaveInvoiceRow,
 } from "@/lib/dal/invoices"
 import { getProfile } from "@/lib/dal/profile"
+import { expireInvoiceCheckouts, getMyStripeAccount, syncStripeAccount } from "@/lib/dal/stripe-accounts"
 import { sendInvoiceEmail } from "@/lib/email/send-invoice"
 import { calculateInvoice } from "@/lib/invoices/calc"
 import { contentHash } from "@/lib/invoices/content-hash"
 import { addDaysIso, defaultDueDate } from "@/lib/invoices/dates"
-import { itemsToLines, toFormValues, type InvoiceItemRow } from "@/lib/invoices/document"
+import { itemsToLines, toFormValues, type InvoiceItemRow, type InvoiceRow } from "@/lib/invoices/document"
 import { invoiceSubject } from "@/lib/invoices/email-text"
 import { vatBpToRate } from "@/lib/invoices/money"
 import { senderName } from "@/lib/invoices/names"
@@ -48,6 +49,9 @@ import {
   type InvoiceValues,
 } from "@/lib/validation/invoice"
 import { ensureCurrentPdf, getCurrentPdf } from "@/lib/pdf/render"
+import { appUrl } from "@/lib/stripe/index"
+import { paymentLinkStatus } from "@/lib/stripe/payment-link"
+import { newPaymentToken } from "@/lib/stripe/token"
 import { isSenderComplete } from "@/lib/validation/profile"
 
 const SAVE_FAILED = "Couldn't save the invoice. Please try again."
@@ -344,16 +348,31 @@ export async function markInvoicePaidAction(id: unknown): Promise<InvoiceActionR
 }
 
 export type SendInvoiceResult =
-  | { ok: true; to: string }
+  /** `paymentLink`: the email included a payment link. */
+  | { ok: true; to: string; paymentLink: boolean }
   /** `needsEdit`: a draft that isn't finished. The dialog sends the user to the edit form. */
   | { ok: false; message: string; needsEdit?: boolean }
 
+type PaymentLink = { token: string; url: string; amountCents: number; currency: InvoiceRow["currency"] }
+
 /**
- * The payment link for this send. Online payments (Stripe Connect) arrive in
- * Milestone 7; until then every user counts as "not connected" (PRD §6.3 AC5).
+ * The payment link for this send, decided before anything is written (Tech.md
+ * §10.1 step 5). Only when the user's Stripe account can take payments right
+ * now (checked live with Stripe) and the total reaches Stripe's minimum
+ * (PRD §6.7 AC5–6). The invoice keeps its token, so the client's link never changes.
  */
-async function paymentLinkFor(): Promise<null> {
-  return null
+async function decidePaymentLink(row: InvoiceRow): Promise<PaymentLink | null> {
+  const stored = await getMyStripeAccount()
+  const account = stored ? await syncStripeAccount(stored) : null
+  const status = paymentLinkStatus({
+    connected: account?.chargesEnabled ?? false,
+    totalCents: row.total_cents,
+    currency: row.currency,
+  })
+  if (status !== "included") return null
+
+  const token = row.payment_token ?? newPaymentToken()
+  return { token, url: appUrl(`/pay/${token}`), amountCents: row.total_cents, currency: row.currency }
 }
 
 /** Finalizes a draft for Send (PRD §6.7 AC2): Not paid, PDF generated. Null if it isn't complete. */
@@ -404,8 +423,8 @@ export async function sendInvoice(input: unknown): Promise<SendInvoiceResult> {
     }
 
     const pdf = await getCurrentPdf(record)
-    const paymentUrl = await paymentLinkFor()
     const { row } = record
+    const link = await decidePaymentLink(row)
     const sender = senderName(profile)!
     const subject = invoiceSubject(row.invoice_number, sender)
     const to = row.client_email!
@@ -423,7 +442,7 @@ export async function sendInvoice(input: unknown): Promise<SendInvoiceResult> {
       currency: row.currency,
       dueDate: row.due_date,
       pdf,
-      paymentUrl,
+      paymentUrl: link?.url ?? null,
     })
 
     await logInvoiceEmail({
@@ -431,20 +450,27 @@ export async function sendInvoice(input: unknown): Promise<SendInvoiceResult> {
       to,
       subject,
       message,
-      includedPaymentLink: paymentUrl !== null,
-      paymentAmountCents: null,
+      includedPaymentLink: link !== null,
+      paymentAmountCents: link?.amountCents ?? null,
       result,
     })
     if (!result.ok) return { ok: false, message: SEND_FAILED }
 
     try {
-      await recordInvoiceSent(row)
+      await recordInvoiceSent(row, link)
     } catch (error) {
-      // The email went out; only the "Sent" date is missing.
+      // The email went out; only the "Sent" date (and a new link's amount) is missing.
       console.error(error)
     }
+
+    // A new amount: an unfinished checkout for the old one stops working, so the
+    // client's next click charges what this email says (Tech.md §10.1 step 8).
+    if (link && (row.payment_amount_cents !== link.amountCents || row.payment_currency !== link.currency)) {
+      await expireInvoiceCheckouts([row.stripe_checkout_session_id])
+    }
+
     revalidateInvoice(invoiceId, [row.client_id])
-    return { ok: true, to }
+    return { ok: true, to, paymentLink: link !== null }
   } catch (error) {
     console.error(error)
     return { ok: false, message: SEND_FAILED }

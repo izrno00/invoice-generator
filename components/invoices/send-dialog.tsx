@@ -1,6 +1,7 @@
 "use client"
 
-import { FilePdfIcon, InfoIcon, WarningCircleIcon } from "@phosphor-icons/react"
+import { CreditCardIcon, FilePdfIcon, InfoIcon, WarningCircleIcon } from "@phosphor-icons/react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useId, useRef, useState, useTransition, type ComponentProps } from "react"
 import { toast } from "sonner"
@@ -21,12 +22,31 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { SendDetails } from "@/lib/dal/invoices"
 import { isNavigationError } from "@/lib/is-navigation-error"
+import { NO_PAYMENT_LINK } from "@/lib/stripe/payment-link"
 import { INVOICE_LIMITS } from "@/lib/validation/invoice"
 
 const SEND_FAILED = "We couldn't send the email. Please try again."
 
-/** No online payments until Stripe Connect ships (Milestone 7), so this is always the note (PRD §6.3 AC5). */
-const NO_PAYMENT_LINK = "No payment link will be included. Connect Stripe to let clients pay online."
+/** Whether the email gets a payment link (PRD §6.3 AC5, §6.7). "Connect Stripe" links to Payments settings. */
+function PaymentNote({ payment }: { payment: SendDetails["payment"] }) {
+  const Icon = payment.status === "included" ? CreditCardIcon : InfoIcon
+  return (
+    <p className="flex gap-2 text-sm text-muted-foreground">
+      <Icon className="mt-0.5 shrink-0" />
+      {payment.status === "not_connected" ? (
+        <span>
+          {NO_PAYMENT_LINK}{" "}
+          <Link href="/settings/payments" className="text-foreground underline underline-offset-4 hover:text-primary">
+            Connect Stripe
+          </Link>{" "}
+          to let clients pay online.
+        </span>
+      ) : (
+        <span>{payment.note}</span>
+      )}
+    </p>
+  )
+}
 
 /** Send / Resend confirmation (PRD §6.7). Nothing is sent until the user clicks Send. */
 export function SendDialog({
@@ -84,7 +104,14 @@ export function SendDialog({
       if (result.ok) {
         attemptId.current = null
         onOpenChange(false)
-        toast.success(`Invoice sent to ${result.to}`)
+        if (details.payment.status === "included" && !result.paymentLink) {
+          // Stripe stopped accepting payments for the account since the page loaded.
+          toast.success(`Invoice sent to ${result.to} without a payment link`, {
+            description: "Your Stripe account can't accept payments right now. Check Settings → Payments.",
+          })
+        } else {
+          toast.success(`Invoice sent to ${result.to}`)
+        }
         return
       }
       if (result.needsEdit) {
@@ -140,10 +167,7 @@ export function SendDialog({
             <FieldDescription>Your client can reply to this email; replies go to your profile email.</FieldDescription>
           </Field>
 
-          <p className="flex gap-2 text-sm text-muted-foreground">
-            <InfoIcon className="mt-0.5 shrink-0" />
-            {NO_PAYMENT_LINK}
-          </p>
+          <PaymentNote payment={details.payment} />
 
           {error && (
             <Alert variant="destructive" aria-live="polite">

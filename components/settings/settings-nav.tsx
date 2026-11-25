@@ -7,8 +7,10 @@ import { isActivePath } from "@/components/app-shell/nav-items"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-/** Payments joins when Stripe Connect ships (PRD §6.11). */
-const SETTINGS_ITEMS = [{ title: "Profile", href: "/settings/profile" }]
+const SETTINGS_ITEMS = [
+  { title: "Profile", href: "/settings/profile" },
+  { title: "Payments", href: "/settings/payments" },
+]
 
 /** Without a pathname nothing is marked active (used as the Suspense fallback). */
 export function SettingsNavLinks({ pathname }: { pathname?: string }) {

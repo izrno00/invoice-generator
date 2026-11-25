@@ -34,11 +34,11 @@ This document covers **how** the product in [PRD.md](PRD.md) gets built: stack, 
 | Tests | `vitest` (dev) | 4.1 | Unit tests next to the code they cover |
 | Language | TypeScript (strict), ESLint 9 + `eslint-config-next` | | Path alias `@/*` → project root |
 
-### 1.2 To add
+### 1.2 Added for payments
 
-| Package | Why |
-|---|---|
-| `stripe` | Stripe Node SDK: Connect onboarding, Checkout Sessions, webhook verification |
+| Package | Version | Why |
+|---|---|---|
+| `stripe` | 23.2.0 | Stripe Node SDK: Connect onboarding (Accounts v2), Checkout Sessions, webhook verification. Pins API version `2026-11-18` |
 
 Install everything with exact versions and commit the lockfile.
 
@@ -113,7 +113,7 @@ flowchart LR
 | **Typed routes** | Use the global `PageProps<'/invoices/[id]'>`, `LayoutProps<'/'>` and `RouteContext<'/invoices/[id]/pdf'>` helpers. `params` and `searchParams` are Promises | `03-api-reference/03-file-conventions/page.md` |
 | **Mutations** | Server Actions in `actions.ts` files (`'use server'`). Every action: (1) `requireUser()`, (2) zod-validate input, (3) do the work, (4) `revalidatePath()` / `refresh()`, (5) return a typed result or `redirect()` | `01-getting-started/07-mutating-data.md`, `02-guides/server-actions.md`, `02-guides/forms.md` |
 | **Security of actions** | Treat every Server Action as a public HTTP endpoint: never trust IDs from the client without an ownership check (RLS handles it if the user-session client is used) | `02-guides/data-security.md` |
-| **Route Handlers** | Used only for: auth confirm (`GET`), PDF download (`GET`), Stripe webhook (`POST`, raw body) | `01-getting-started/15-route-handlers.md` |
+| **Route Handlers** | Used only for: auth confirm (`GET`), PDF download (`GET`), Stripe onboarding refresh (`GET /settings/payments/refresh`), Stripe webhook (`POST`, raw body) | `01-getting-started/15-route-handlers.md` |
 | **Partial prefetching** | Enabled. Keep the static shell meaningful so navigations feel instant | `02-guides/adopting-partial-prefetching.md` |
 | **`next.config.ts`** | `serverExternalPackages: ["@react-email/render"]`: React Email renders with `react-dom/server`, which throws when bundled for React Server Components (Server Actions), so it's loaded from `node_modules`. `outputFileTracingIncludes` adds `lib/pdf/fonts/*.ttf` to the `/invoices/**` and `/clients/**` routes: the PDF reads its fonts from disk, where file tracing can't see them | `05-config/01-next-config-js/output.md`, `serverExternalPackages.md` |
 
@@ -155,11 +155,13 @@ app/
     settings/
       profile/page.tsx
       payments/page.tsx           # Stripe Connect status + connect/continue
-      actions.ts
+      payments/refresh/route.ts   # GET: new onboarding link when Stripe's expired
+      actions.ts                  # updateProfile, connectStripe
   pay/
     [token]/page.tsx              # public pay page
     [token]/actions.ts            # startCheckout (Server Action)
-    [token]/success/page.tsx
+    [token]/success/page.tsx      # thank you (+ number and amount)
+    layout.tsx                    # public, no app shell, noindex, no referrer
   api/
     stripe/webhook/route.ts       # POST: Stripe Connect webhook
 
@@ -167,7 +169,8 @@ components/
   ui/                             # shadcn components (generated, don't hand-edit unless needed)
   app-shell/                      # app-header, main-nav, mobile-nav (sheet), nav-links,
                                   # nav-items (text-only items), nav-user (user menu)
-  settings/                       # settings-nav, profile-form
+  settings/                       # settings-nav, profile-form, payments-panel
+  pay/                            # pay-panel (summary + Pay now, end states)
   dashboard/                      # profile-banner
   invoices/                       # invoice-form, line-items-editor (+ live totals), date-picker,
                                   # status-badge, invoice-preview, invoice-actions (row menu,
@@ -196,7 +199,7 @@ lib/
     filters.ts                    # escaping user text in PostgREST filters (§8.4)
   dal/                            # server-only data access layer
     auth.ts                       # getUser(), requireUser()
-    profile.ts  clients.ts  invoices.ts  stripe-accounts.ts  dashboard.ts
+    profile.ts  clients.ts  invoices.ts  stripe-accounts.ts  pay.ts  dashboard.ts
   invoices/                       # pure, no I/O, unit tested
     calc.ts                       # pure totals maths (shared client + server)
     money.ts                      # typed price / VAT / quantity → cents / basis points
@@ -217,9 +220,11 @@ lib/
     fonts/                        # TTF files with Latin Extended glyphs
   stripe/
     index.ts                      # Stripe client (server-only)
-    connect.ts                    # create account, account links, sync status
-    checkout.ts                   # create/expire Checkout Sessions
-    webhook.ts                    # event handlers
+    connect.ts                    # create account, account links, account status (Accounts v2)
+    checkout.ts                   # create/retrieve/expire Checkout Sessions
+    payment-link.ts               # pure: minimums, link decision, dialog note (unit tested)
+    token.ts                      # payment token generator
+    webhook.ts                    # event handlers (with the webhook)
   email/
     index.ts                      # sendEmail() (a React element, or rendered html + text)
     send-invoice.ts               # render the invoice email and send it
@@ -418,7 +423,7 @@ One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns pe
 2. Load the invoice (RLS). Reject if `paid`. If `draft`, run the final schema and **finalize** first (status → `unpaid`, generate PDF).
 3. Check preconditions: client email present, profile has (name or company) and email.
 4. Make sure the PDF is current (regenerate if `pdf_content_hash !== content_hash`). Download it from storage as a `Buffer`.
-5. **Payment link decision (in memory, nothing written yet).** *Until Milestone 7 (Stripe) ships, `paymentLinkFor()` in `actions.ts` always returns null: every user counts as "not connected", emails have no Pay button and the dialog shows the "No payment link" note as plain text (no link to Payments settings yet).* Then: load `stripe_accounts` for the user. Include a link only if `charges_enabled` and `total_cents ≥ Stripe minimum` for the currency. If included, use the existing `payment_token`, or generate one (`crypto.randomBytes(24).toString('base64url')`) to build the link URL.
+5. **Payment link decision (in memory, nothing written yet)**, `decidePaymentLink()` in `actions.ts`: load `stripe_accounts` for the user and **check it live with Stripe** (`syncStripeAccount`, falls back to the stored flags if Stripe can't be reached). Include a link only if `charges_enabled` and `total_cents ≥ STRIPE_MINIMUM_CENTS[currency]` (`lib/stripe/payment-link.ts`: EUR 50, USD 75, GBP 50, BAM 100, chosen so the charge clears Stripe's minimum whatever currency the connected account settles in). If included, use the existing `payment_token`, or generate one (`lib/stripe/token.ts`: `randomBytes(24).toString('base64url')`) to build the link URL. The send dialog shows the same decision from the **stored** flag (`SendDetails.payment`), and the success toast says so if the live check removed the link.
 6. Render `emails/invoice-email.tsx` to HTML and plain text with `@react-email/render` (`lib/email/send-invoice.ts`), and call `sendEmail()` with `html` + `text`:
    - `from`: `"<Sender name> via Invoice Generator <address from EMAIL_FROM>"` (strip `"`, `<`, `>` from the name),
    - `replyTo`: profile email,
@@ -448,7 +453,9 @@ React Email components (check the exports of the installed `react-email` package
 - **Direct charges:** Checkout Sessions are created **on the connected account** (`{ stripeAccount: acct_… }`). Money goes straight to the freelancer. **No `application_fee_amount`.**
 - Card only: `payment_method_types: ['card']`.
 
-> *Verify against current Stripe docs before implementing.* Stripe's recommended way to create accounts has changed over time (`type: 'standard'` vs `controller` properties vs Accounts v2). Pick the current equivalent of: Stripe-hosted onboarding, full dashboard, fees paid by the connected account, losses owned by Stripe/the account.
+- **Accounts v2 API** (`stripe.v2.core.accounts`), which Stripe recommends for new Connect platforms (new platforms may even need to enable v1 separately): `dashboard: 'full'`, `identity.country`, `defaults.responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' }`, `configuration.merchant.capabilities.card_payments.requested: true`. This is the v2 equivalent of a Standard account. **v2 requires `identity.country` before `configuration.merchant`, and a full dashboard requires the merchant configuration**, so the app asks for the country in the Connect dialog (list from `countrySpecs.list()`, cached 12 h, default `HR`). v1 without a country silently defaults to the platform's country (HR), so it wasn't used. Stripe's hosted onboarding collects everything else. v2 account ids are ordinary `acct_…` ids, so Checkout Sessions still use the `stripeAccount` header.
+- **Flags from a v2 account** (`lib/stripe/connect.ts` `fetchAccountStatus`, retrieved with `include: ['configuration.merchant', 'requirements']`): `charges_enabled` = `configuration.merchant.capabilities.card_payments.status === 'active'`; `details_submitted` = no `requirements.entries` with `awaiting_action_from: 'user'` that are currently or past due. A closed account, or a `403 StripePermissionError` / 404 (the account disconnected from the platform) counts as **revoked**: the `stripe_accounts` row is deleted.
+- **Stripe API version:** pinned by the SDK (`stripe@23.2.0` → `2026-11-18`). In this version Checkout Sessions take `allowed_payment_method_types` (the old `payment_method_types` was removed).
 
 ### 11.2 Onboarding (`settings/payments`)
 
@@ -459,20 +466,22 @@ sequenceDiagram
     participant S as Stripe
     participant DB as Postgres (admin)
 
-    U->>A: Connect Stripe / Continue setup
+    U->>A: Connect Stripe (with country) / Continue setup
     alt no stripe_accounts row
-        A->>S: accounts.create({ controller: { stripe_dashboard: { type: 'full' }, fees: { payer: 'account' }, … }, email })
-        A->>DB: insert stripe_accounts(user_id, stripe_account_id)
+        A->>S: v2.core.accounts.create({ dashboard: 'full', identity.country, defaults.responsibilities, configuration.merchant, contact_email }, idempotencyKey per user + country + minute)
+        A->>DB: insert stripe_accounts(user_id, stripe_account_id) (on conflict do nothing)
     end
-    A->>S: accountLinks.create({ account, type: 'account_onboarding', refresh_url, return_url })
+    A->>S: v2.core.accountLinks.create({ account, use_case: { type: 'account_onboarding', account_onboarding: { refresh_url, return_url } } })
     A-->>U: redirect to Stripe onboarding
     S-->>U: redirect back to /settings/payments?stripe=return
-    U->>A: page load → accounts.retrieve() → sync charges_enabled, details_submitted
-    S-->>DB: (async) webhook account.updated keeps flags in sync
+    U->>A: page load → v2.core.accounts.retrieve() → sync charges_enabled, details_submitted (or delete if revoked)
+    S-->>DB: (async, once the webhook exists) account.updated keeps flags in sync
 ```
 
-- `refresh_url`: a route that creates a new Account Link and redirects (links expire quickly).
-- The page shows **Not connected / Setup incomplete / Connected** from `stripe_accounts`.
+- `refresh_url`: `app/(app)/settings/payments/refresh/route.ts` creates a new Account Link and redirects (links expire quickly). On failure it redirects to `/settings/payments?stripe=error`.
+- The page shows **Not connected / Setup incomplete / Connected** after the live sync. "Setup incomplete" = `charges_enabled` false; with `details_submitted` true it says Stripe is reviewing. Connected shows the account's `display_name` or `contact_email`. `?stripe=return|error` shows a toast once, then is removed from the URL.
+- The account email is the profile email, or the login email if the profile has none.
+- **Live checks until the webhook exists:** there is no `account.updated` / `account.application.deauthorized` yet, so the account is checked with Stripe on the Payments page, at every send, and on every **Pay now**. The pay page itself and the send dialog use the stored flag.
 - "Open Stripe dashboard" links to `https://dashboard.stripe.com` (full-dashboard accounts log in themselves).
 
 ### 11.3 Pay page and checkout
@@ -490,10 +499,11 @@ sequenceDiagram
     P->>DB: find invoice by payment_token (narrow select)
     P-->>C: summary + Pay now (or paid / invalid / unavailable state)
     C->>A: Pay now
-    A->>DB: re-check: status = unpaid, account charges_enabled
-    A->>S: expire previous open session (if any)
-    A->>S: checkout.sessions.create({ mode: 'payment', line_items: [{ price_data: { currency, unit_amount: payment_amount_cents, product_data: { name: 'Invoice 2026-001' } }, quantity: 1 }], payment_method_types: ['card'], customer_email, client_reference_id: invoice.id, metadata: { invoice_id }, payment_intent_data: { metadata: { invoice_id } }, success_url, cancel_url }, { stripeAccount, idempotencyKey })
-    A->>DB: save stripe_checkout_session_id
+    A->>DB: re-check: status = unpaid
+    A->>S: live account check (charges_enabled)
+    A->>S: retrieve previous session (if any): paid → "paid" state; open with same amount → reuse its url; other open → expire
+    A->>S: checkout.sessions.create({ mode: 'payment', line_items: [{ price_data: { currency, unit_amount: payment_amount_cents, product_data: { name: 'Invoice 2026-001' } }, quantity: 1 }], allowed_payment_method_types: ['card'], customer_email, client_reference_id: invoice.id, metadata: { invoice_id }, payment_intent_data: { metadata: { invoice_id } }, locale: 'auto', expires_at: ~1 h, success_url (with {CHECKOUT_SESSION_ID}), cancel_url (?cancelled=1) }, { stripeAccount, idempotencyKey })
+    A->>DB: save stripe_checkout_session_id (where status = unpaid)
     A-->>C: redirect to session.url
     C->>S: pays by card
     S-->>C: redirect to /pay/[token]/success
@@ -503,8 +513,12 @@ sequenceDiagram
 
 - The pay page uses the **admin client** (the client isn't logged in) and selects **only** the fields it shows. Unknown token → "link no longer valid".
 - `payment_amount_cents` / `payment_currency` (set at the last successful send) are what's charged, **not** the current `total_cents`. That's how "the old link keeps working until resend" is implemented.
-- The success page only says thank you. It doesn't mark anything paid (the webhook does).
-- Stripe minimum charge amounts (e.g. 0.50 EUR/USD, 0.30 GBP) are checked at send time. *Verify BAM support and its minimum for the connected accounts' countries.*
+- The success page says thank you, plus the invoice number and amount when the `session_id` it gets back is a paid session of this invoice (checked on the connected account against `metadata.invoice_id`). It doesn't mark anything paid (the webhook does).
+- **Until the webhook ships**, online payments don't change the invoice's status. To keep a client from paying twice meanwhile, the pay page and **Pay now** look at the invoice's last Checkout Session: if it's `complete` + `paid`, they show "This invoice has been paid" (nothing is written).
+- **Idempotency key:** `checkout/<invoice>/<currency>/<amount>/<previous session>/<minute>`, and `expires_at` is derived from the same minute, so two clicks in one minute send identical requests (Stripe rejects a reused key with different parameters).
+- **Expiring sessions** (`expireCheckoutSessions`) is best effort: on delete, mark as paid, client delete and resend-with-new-amount, a failure is logged and the app action still goes ahead. A session that's already expired or complete is skipped.
+- Pages under `/pay` are `noindex` and send no referrer (the token is in the URL). They're outside the app shell and don't read the session.
+- Stripe minimum charge amounts are checked at send time (see §10.1 step 5). BAM is a supported presentment currency; it's pegged to the euro, so BAM 1.00 clears EUR 0.50.
 
 ### 11.4 Webhook (`app/api/stripe/webhook/route.ts`)
 
@@ -517,7 +531,7 @@ sequenceDiagram
 |---|---|
 | `checkout.session.completed` | If `payment_status === 'paid'`: load invoice by `metadata.invoice_id`; check that `event.account` equals the owner's `stripe_accounts.stripe_account_id`; `update invoices set status='paid', paid_at=now(), paid_method='stripe', paid_amount_cents=session.amount_total, paid_currency=upper(session.currency) where id=… and status='unpaid'`. If the invoice is already paid/deleted, log it (the freelancer can refund from their Stripe dashboard) |
 | `checkout.session.async_payment_succeeded` | Same as above (defensive; cards are normally synchronous) |
-| `account.updated` | Sync `charges_enabled`, `details_submitted` for that `stripe_account_id` |
+| `account.updated` | Sync `charges_enabled`, `details_submitted` for that `stripe_account_id` (v2 accounts still send this v1 event; reuse `syncStripeAccount` or map the v1 object's flags) |
 | `account.application.deauthorized` | Delete the `stripe_accounts` row (pay pages switch to "unavailable") |
 
 - All DB writes in the webhook use the **admin client**. The DB triggers still enforce "paid is final".
@@ -551,12 +565,12 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 |---|---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL | exists |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public | Supabase publishable key | exists |
-| `SUPABASE_SECRET_KEY` | server | Admin client (webhook, pay page, Stripe account writes) | **add** |
+| `SUPABASE_SECRET_KEY` | server | Admin client (webhook, pay page, Stripe account writes) | exists |
 | `RESEND_API_KEY` | server | Resend API | exists |
 | `EMAIL_FROM` | server | `Invoice Generator <invoices@your-domain>` on the verified domain | exists |
-| `STRIPE_SECRET_KEY` | server | Stripe platform secret key (`sk_test_…` / `sk_live_…`) | **add** |
-| `STRIPE_WEBHOOK_SECRET` | server | Signing secret of the Connect webhook endpoint | **add** |
-| `NEXT_PUBLIC_APP_URL` | public | Absolute base URL for email links and Stripe redirect URLs (`http://localhost:3000` locally) | **add** |
+| `STRIPE_SECRET_KEY` | server | Stripe platform secret key (`sk_test_…` / `sk_live_…`) | exists |
+| `STRIPE_WEBHOOK_SECRET` | server | Signing secret of the Connect webhook endpoint | **add** with the webhook |
+| `NEXT_PUBLIC_APP_URL` | public | Absolute base URL for email links and Stripe redirect URLs (`http://localhost:3000` locally) | exists (localhost until the domain is set up) |
 
 Update `.env.example` with the new keys (no values). Never prefix secrets with `NEXT_PUBLIC_`.
 
@@ -593,7 +607,7 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 5. Send without Stripe connected → email arrives, PDF attached, no pay button.
 6. Connect Stripe (test) → resend → email has pay button.
 7. Edit the amount → resend prompt → **Not now** → old link still charges the old amount.
-8. Pay with `4242…` → invoice turns Paid → locked (no edit/delete/resend).
+8. Pay with `4242…` → success page shows number + amount → pay page shows "paid". Invoice turns Paid → locked (no edit/delete/resend) **once the webhook exists**.
 9. Mark another invoice paid manually → its pay link shows "paid".
 10. Delete a sent invoice → pay link shows "no longer valid".
 11. Delete a client with paid + unpaid invoices (both options).
@@ -613,7 +627,7 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 | 4 | **Invoices core**: calc, form, draft/final, numbering, details, list with filters/search/pagination, duplicate, delete, mark as paid | PRD §6.5, 6.10–6.14 AC pass |
 | 5 | **PDF** generation, storage, download | PRD §6.6 AC pass |
 | 6 | **Email** send/resend + resend prompt | PRD §6.7–6.8 AC pass |
-| 7 | **Stripe**: Connect onboarding, pay page, checkout, webhook | PRD §6.3, 6.9 AC pass |
+| 7 | **Stripe**: Connect onboarding, pay page, checkout (done); webhook (after the domain is verified) | PRD §6.3, 6.9 AC pass |
 | 8 | **Dashboard**, empty states, error states, responsive pass, accessibility pass | PRD §6.15, §9, §10 |
 | 9 | **Deploy** to Vercel, production config, E2E checklist | Checklist passes on production (test mode) |
 | 10 | **Landing page**, built section by section | Follow-up |

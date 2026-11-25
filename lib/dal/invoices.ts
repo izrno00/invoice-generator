@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { requireUser } from "@/lib/dal/auth"
 import { getProfile } from "@/lib/dal/profile"
+import { expireInvoiceCheckouts, getMyStripeAccount } from "@/lib/dal/stripe-accounts"
 import {
   isComplete,
   ITEM_COLUMNS,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/invoices/document"
 import { defaultSendMessage, invoiceSubject } from "@/lib/invoices/email-text"
 import { invoiceFileName } from "@/lib/invoices/format"
+import { paymentLinkNote, paymentLinkStatus, type PaymentLinkStatus } from "@/lib/stripe/payment-link"
 import { greetingName, senderName } from "@/lib/invoices/names"
 import { clientFromRow } from "@/lib/invoices/snapshot"
 import {
@@ -76,6 +78,8 @@ export type SendDetails = {
   fileName: string
   /** Sent before: the dialog says "Resend". */
   resend: boolean
+  /** Whether the email will have a payment link, as far as the stored Stripe status says (PRD §6.7). */
+  payment: { status: PaymentLinkStatus; note: string }
 }
 
 export type InvoiceSummary = {
@@ -129,9 +133,14 @@ function isUuid(id: string) {
   return z.uuid().safeParse(id).success
 }
 
-function sendDetails(row: ListRow, profile: Profile): SendDetails | null {
+function sendDetails(row: ListRow, profile: Profile, paymentsEnabled: boolean): SendDetails | null {
   if (!row.client_email) return null
   const client = clientFromRow(row)
+  const paymentStatus = paymentLinkStatus({
+    connected: paymentsEnabled,
+    totalCents: row.total_cents,
+    currency: row.currency,
+  })
 
   return {
     invoiceId: row.id,
@@ -148,12 +157,24 @@ function sendDetails(row: ListRow, profile: Profile): SendDetails | null {
     }),
     fileName: invoiceFileName(row.invoice_number),
     resend: row.first_sent_at !== null,
+    payment: { status: paymentStatus, note: paymentLinkNote(paymentStatus, row.currency) },
   }
 }
 
 function toSummary(
   row: ListRow,
-  { profile, draftComplete, today }: { profile: Profile; draftComplete: boolean; today: string }
+  {
+    profile,
+    draftComplete,
+    today,
+    paymentsEnabled,
+  }: {
+    profile: Profile
+    draftComplete: boolean
+    today: string
+    /** The user's Stripe account can accept payments (stored flag; Send re-checks with Stripe). */
+    paymentsEnabled: boolean
+  }
 ): InvoiceSummary {
   const actions = allowedActions({
     status: row.status,
@@ -177,7 +198,7 @@ function toSummary(
     lastSentAt: row.last_sent_at,
     overdue: isOverdue({ status: row.status, dueDate: row.due_date }, today),
     actions,
-    send: actions.send.kind === "dialog" ? sendDetails(row, profile) : null,
+    send: actions.send.kind === "dialog" ? sendDetails(row, profile, paymentsEnabled) : null,
   }
 }
 
@@ -221,13 +242,14 @@ export async function listInvoices(filters: InvoiceFilters): Promise<InvoiceList
   }
 
   const start = (page - 1) * INVOICES_PAGE_SIZE
-  const [{ data, error, count }, profile] = await Promise.all([
+  const [{ data, error, count }, profile, stripeAccount] = await Promise.all([
     filtered(false)
       .order("invoice_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id")
       .range(start, start + INVOICES_PAGE_SIZE - 1),
     getProfile(),
+    getMyStripeAccount(),
   ])
 
   let total = count ?? 0
@@ -251,6 +273,7 @@ export async function listInvoices(filters: InvoiceFilters): Promise<InvoiceList
         profile,
         today,
         draftComplete: row.status === "draft" && isComplete(row, items.get(row.id) ?? []),
+        paymentsEnabled: stripeAccount?.charges_enabled ?? false,
       })
     ),
     total,
@@ -283,7 +306,7 @@ export async function getInvoiceRecord(id: string): Promise<InvoiceRecord | null
 
 /** One invoice for the details and edit pages. */
 export const getInvoice = cache(async (id: string): Promise<InvoiceDetails | null> => {
-  const [record, profile] = await Promise.all([getInvoiceRecord(id), getProfile()])
+  const [record, profile, stripeAccount] = await Promise.all([getInvoiceRecord(id), getProfile(), getMyStripeAccount()])
   if (!record) return null
   const { row, items } = record
 
@@ -292,6 +315,7 @@ export const getInvoice = cache(async (id: string): Promise<InvoiceDetails | nul
       profile,
       today: todayUtc(),
       draftComplete: row.status === "draft" && isComplete(row, items),
+      paymentsEnabled: stripeAccount?.charges_enabled ?? false,
     }),
     document: toDocumentData(row, items),
     formValues: toFormValues(row, items),
@@ -384,9 +408,11 @@ export async function markInvoicePaid(id: string): Promise<boolean> {
     .maybeSingle()
 
   if (error) throw new Error(`Couldn't mark the invoice as paid: ${error.message}`)
+  if (!data) return false
 
-  // TODO (Milestone 7, Stripe): expire `stripe_checkout_session_id` on the connected account.
-  return data !== null
+  // The client's payment link stops accepting payments (PRD §6.10 AC2).
+  await expireInvoiceCheckouts([record.row.stripe_checkout_session_id])
+  return true
 }
 
 /**
@@ -403,7 +429,7 @@ export async function deleteInvoiceRecord(id: string): Promise<boolean> {
     .delete()
     .eq("id", id)
     .in("status", ["draft", "unpaid"])
-    .select("id, pdf_path")
+    .select("id, pdf_path, stripe_checkout_session_id")
     .maybeSingle()
 
   if (error) throw new Error(`Couldn't delete invoice: ${error.message}`)
@@ -415,7 +441,8 @@ export async function deleteInvoiceRecord(id: string): Promise<boolean> {
     if (storageError) console.error(`Couldn't delete invoice PDF: ${storageError.message}`)
   }
 
-  // TODO (Milestone 7, Stripe): expire `stripe_checkout_session_id` on the connected account.
+  // Any unfinished checkout is cancelled; the payment link itself is gone with the row (PRD §6.14 AC4).
+  await expireInvoiceCheckouts([data.stripe_checkout_session_id])
   return true
 }
 
@@ -447,7 +474,11 @@ export async function logInvoiceEmail(entry: {
 }
 
 /** After a successful send (Tech.md §10.1 step 8). */
-export async function recordInvoiceSent(row: Pick<InvoiceRow, "id" | "first_sent_at" | "content_hash">) {
+export async function recordInvoiceSent(
+  row: Pick<InvoiceRow, "id" | "first_sent_at" | "content_hash">,
+  /** Set when the email had a payment link: the link now charges this amount (PRD §6.8 AC5). */
+  link: { token: string; amountCents: number; currency: InvoiceRow["currency"] } | null = null
+) {
   await requireUser()
   const supabase = await createClient()
   const now = new Date().toISOString()
@@ -458,6 +489,9 @@ export async function recordInvoiceSent(row: Pick<InvoiceRow, "id" | "first_sent
       first_sent_at: row.first_sent_at ?? now,
       last_sent_at: now,
       last_sent_content_hash: row.content_hash,
+      ...(link
+        ? { payment_token: link.token, payment_amount_cents: link.amountCents, payment_currency: link.currency }
+        : {}),
     })
     .eq("id", row.id)
     .eq("status", "unpaid")
