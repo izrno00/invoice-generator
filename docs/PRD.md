@@ -421,7 +421,7 @@ The page a client reaches from the **Pay invoice** button. No login required.
 
 **AC**
 1. **Pay now** takes the client to a secure Stripe card checkout for exactly that amount and currency. The client's email is pre-filled when known.
-2. After a successful payment the client sees a "Thank you, your payment was received" page with the invoice number and the amount paid, and the invoice becomes **Paid** automatically within moments. No emails are sent. *(Interim: the automatic Paid status arrives with the Stripe webhook, which waits for a verified domain. Until then an online payment doesn't change the invoice's status, but the pay page already shows "This invoice has been paid" and offers no second payment.)*
+2. After a successful payment the client sees a "Thank you, your payment was received" page with the invoice number and the amount paid, and the invoice becomes **Paid** automatically within moments. No emails are sent.
 3. If the client cancels at Stripe, they return to the pay page, which says "Payment cancelled. You can try again."
 4. Clicking **Pay now** again while an earlier checkout for the same amount is still open reopens that checkout. A checkout stays open for one hour. Stripe's checkout page uses the client's browser language.
 5. Page states:
@@ -439,7 +439,7 @@ The page a client reaches from the **Pay invoice** button. No login required.
 ### 6.10 Invoice status changes
 
 **AC**
-1. **Automatic:** when Stripe confirms a successful payment, the invoice becomes Paid. This must be reliable, so a confirmation that arrives more than once or late still results in exactly one status change. *(Ships with the Stripe webhook, after the domain is verified; see §6.9 AC2.)*
+1. **Automatic:** when Stripe confirms a successful payment, the invoice becomes Paid. This must be reliable, so a confirmation that arrives more than once or late still results in exactly one status change.
 2. **Manual:** **Mark as paid** (Not paid invoices only) opens a confirmation: *"Mark invoice 2026-001 as paid? This can't be undone. The invoice will be locked and the client's payment link will stop accepting payments."* Confirming sets the invoice to Paid.
 3. Paid invoices can't be changed back to Not paid, by the user or anyone else.
 4. The paid date isn't displayed in the invoice UI. It's used only for the Dashboard's "Paid this month" figure.

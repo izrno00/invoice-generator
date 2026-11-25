@@ -42,7 +42,7 @@ export async function startCheckout(token: unknown): Promise<StartCheckoutResult
           return null
         })
       : null
-    // Already paid: until the webhook marks the invoice Paid, this stops a second payment.
+    // Already paid: until the webhook has marked the invoice Paid, this stops a second payment.
     if (previous && isPaidSession(previous)) return { kind: "paid" }
 
     // An unfinished checkout for the same amount is reused; any other one is cancelled (PRD §6.9 AC4, AC6).

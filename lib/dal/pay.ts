@@ -75,7 +75,7 @@ export type PayPageState =
   | { kind: "unavailable" }
   | { kind: "payable"; summary: PaySummary }
 
-/** The checkout before this one was paid. Until the webhook marks the invoice Paid, this stops a second payment. */
+/** The checkout before this one was paid. Until the webhook has marked the invoice Paid, this stops a second payment. */
 export async function hasPaidCheckout(accountId: string, sessionId: string | null): Promise<boolean> {
   if (!sessionId) return false
   try {

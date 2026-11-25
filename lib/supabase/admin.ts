@@ -7,7 +7,7 @@ import type { Database } from "@/lib/supabase/database.types"
 /**
  * Supabase client with the secret key (Tech.md §6.1). It **bypasses RLS**, so
  * every query must filter explicitly. Only for the public pay page and its
- * checkout action, and for writes to `stripe_accounts`.
+ * checkout action, writes to `stripe_accounts`, and the Stripe webhook.
  */
 export function createAdminClient() {
   const secretKey = process.env.SUPABASE_SECRET_KEY

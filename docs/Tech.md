@@ -201,7 +201,7 @@ lib/
     filters.ts                    # escaping user text in PostgREST filters (§8.4)
   dal/                            # server-only data access layer
     auth.ts                       # getUser(), requireUser()
-    profile.ts  clients.ts  invoices.ts  stripe-accounts.ts  pay.ts  dashboard.ts
+    profile.ts  clients.ts  invoices.ts  stripe-accounts.ts  pay.ts  stripe-webhook.ts  dashboard.ts
   invoices/                       # pure, no I/O, unit tested
     calc.ts                       # pure totals maths (shared client + server)
     money.ts                      # typed price / VAT / quantity → cents / basis points
@@ -226,7 +226,7 @@ lib/
     checkout.ts                   # create/retrieve/expire Checkout Sessions
     payment-link.ts               # pure: minimums, link decision, dialog note (unit tested)
     token.ts                      # payment token generator
-    webhook.ts                    # event handlers (with the webhook)
+    webhook.ts                    # verify + dispatch webhook events (DB writes in lib/dal/stripe-webhook.ts)
   email/
     index.ts                      # sendEmail() (a React element, or rendered html + text)
     send-invoice.ts               # render the invoice email and send it
@@ -477,13 +477,13 @@ sequenceDiagram
     A-->>U: redirect to Stripe onboarding
     S-->>U: redirect back to /settings/payments?stripe=return
     U->>A: page load → v2.core.accounts.retrieve() → sync charges_enabled, details_submitted (or delete if revoked)
-    S-->>DB: (async, once the webhook exists) account.updated keeps flags in sync
+    S-->>DB: (async, webhook) account.updated keeps flags in sync
 ```
 
 - `refresh_url`: `app/(app)/settings/payments/refresh/route.ts` creates a new Account Link and redirects (links expire quickly). On failure it redirects to `/settings/payments?stripe=error`.
 - The page shows **Not connected / Setup incomplete / Connected** after the live sync. "Setup incomplete" = `charges_enabled` false; with `details_submitted` true it says Stripe is reviewing. Connected shows the account's `display_name` or `contact_email`. `?stripe=return|error` shows a toast once, then is removed from the URL.
 - The account email is the profile email, or the login email if the profile has none.
-- **Live checks until the webhook exists:** there is no `account.updated` / `account.application.deauthorized` yet, so the account is checked with Stripe on the Payments page, at every send, and on every **Pay now**. The pay page itself and the send dialog use the stored flag.
+- **Live checks on top of the webhook:** `account.updated` / `account.application.deauthorized` keep the stored row in sync, and the account is also checked with Stripe on the Payments page, at every send, and on every **Pay now**. The pay page itself and the send dialog use the stored flag.
 - "Open Stripe dashboard" links to `https://dashboard.stripe.com` (full-dashboard accounts log in themselves).
 
 ### 11.3 Pay page and checkout
@@ -516,7 +516,7 @@ sequenceDiagram
 - The pay page uses the **admin client** (the client isn't logged in) and selects **only** the fields it shows. Unknown token → "link no longer valid".
 - `payment_amount_cents` / `payment_currency` (set at the last successful send) are what's charged, **not** the current `total_cents`. That's how "the old link keeps working until resend" is implemented.
 - The success page says thank you, plus the invoice number and amount when the `session_id` it gets back is a paid session of this invoice (checked on the connected account against `metadata.invoice_id`). It doesn't mark anything paid (the webhook does).
-- **Until the webhook ships**, online payments don't change the invoice's status. To keep a client from paying twice meanwhile, the pay page and **Pay now** look at the invoice's last Checkout Session: if it's `complete` + `paid`, they show "This invoice has been paid" (nothing is written).
+- **Between payment and webhook** (moments, or longer if delivery fails and Stripe retries), the invoice is still Not paid. To keep a client from paying twice meanwhile, the pay page and **Pay now** look at the invoice's last Checkout Session: if it's `complete` + `paid`, they show "This invoice has been paid" (nothing is written).
 - **Idempotency key:** `checkout/<invoice>/<currency>/<amount>/<previous session>/<minute>`, and `expires_at` is derived from the same minute, so two clicks in one minute send identical requests (Stripe rejects a reused key with different parameters).
 - **Expiring sessions** (`expireCheckoutSessions`) is best effort: on delete, mark as paid, client delete and resend-with-new-amount, a failure is logged and the app action still goes ahead. A session that's already expired or complete is skipped.
 - Pages under `/pay` are `noindex` and send no referrer (the token is in the URL). They're outside the app shell and don't read the session.
@@ -571,7 +571,7 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 | `RESEND_API_KEY` | server | Resend API | exists |
 | `EMAIL_FROM` | server | `Payable <invoices@your-domain>` on the verified domain | exists |
 | `STRIPE_SECRET_KEY` | server | Stripe platform secret key (`sk_test_…` / `sk_live_…`) | exists |
-| `STRIPE_WEBHOOK_SECRET` | server | Signing secret of the Connect webhook endpoint | **add** with the webhook |
+| `STRIPE_WEBHOOK_SECRET` | server | Signing secret of the Connect webhook endpoint | exists |
 | `NEXT_PUBLIC_APP_URL` | public | Absolute base URL for email links and Stripe redirect URLs (`http://localhost:3000` locally) | exists (localhost until the domain is set up) |
 
 Update `.env.example` with the new keys (no values). Never prefix secrets with `NEXT_PUBLIC_`.
@@ -609,7 +609,7 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 5. Send without Stripe connected → email arrives, PDF attached, no pay button.
 6. Connect Stripe (test) → resend → email has pay button.
 7. Edit the amount → resend prompt → **Not now** → old link still charges the old amount.
-8. Pay with `4242…` → success page shows number + amount → pay page shows "paid". Invoice turns Paid → locked (no edit/delete/resend) **once the webhook exists**.
+8. Pay with `4242…` → success page shows number + amount → pay page shows "paid". Invoice turns Paid (via the webhook) → locked (no edit/delete/resend).
 9. Mark another invoice paid manually → its pay link shows "paid".
 10. Delete a sent invoice → pay link shows "no longer valid".
 11. Delete a client with paid + unpaid invoices (both options).
@@ -629,7 +629,7 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 | 4 | **Invoices core**: calc, form, draft/final, numbering, details, list with filters/search/pagination, duplicate, delete, mark as paid | PRD §6.5, 6.10–6.14 AC pass |
 | 5 | **PDF** generation, storage, download | PRD §6.6 AC pass |
 | 6 | **Email** send/resend + resend prompt | PRD §6.7–6.8 AC pass |
-| 7 | **Stripe**: Connect onboarding, pay page, checkout (done); webhook (after the domain is verified) | PRD §6.3, 6.9 AC pass |
+| 7 | **Stripe**: Connect onboarding, pay page, checkout, webhook | PRD §6.3, 6.9 AC pass |
 | 8 | **Dashboard**, empty states, error states, responsive pass, accessibility pass | PRD §6.15, §9, §10 |
 | 9 | **Deploy** to Vercel, production config, E2E checklist | Checklist passes on production (test mode) |
 | 10 | **Landing page**, built section by section | Follow-up |

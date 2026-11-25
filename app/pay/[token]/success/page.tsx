@@ -28,7 +28,7 @@ async function PaidDetails({ params, searchParams }: PageProps<"/pay/[token]/suc
 
 /**
  * After a successful payment at Stripe. Only says thank you: nothing is marked
- * paid here (the webhook will do that, Tech.md §11.3–11.4).
+ * paid here (the webhook does that, Tech.md §11.3–11.4).
  */
 export default function PaySuccessPage(props: PageProps<"/pay/[token]/success">) {
   return (

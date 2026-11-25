@@ -66,8 +66,8 @@ export async function insertStripeAccount(userId: string, accountId: string): Pr
 }
 
 /**
- * Brings the stored flags in line with Stripe (until the `account.updated`
- * webhook exists, this live check is the only sync). Deletes the row when the
+ * Brings the stored flags in line with Stripe (the `account.updated` webhook
+ * calls it too, on top of the live checks). Deletes the row when the
  * account was closed or disconnected (then returns null). If Stripe can't be
  * reached, the stored flags are used. Never throws.
  */
