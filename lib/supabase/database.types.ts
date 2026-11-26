@@ -400,6 +400,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dashboard_paid_by_month: {
+        Args: never
+        Returns: {
+          currency: Database["public"]["Enums"]["currency_code"]
+          month: string
+          paid_cents: number
+          paid_to_date_cents: number
+        }[]
+      }
       dashboard_summary: {
         Args: never
         Returns: {

@@ -490,14 +490,18 @@ The page a client reaches from the **Pay invoice** button. No login required.
 ### 6.15 Dashboard
 
 **AC**
-1. Shows, **per currency** (amounts are never added across currencies):
-   - **Outstanding:** total and count of Not paid invoices,
-   - **Overdue:** total and count of Not paid invoices past their due date,
-   - **Paid this month:** total received in the current calendar month.
-2. **Recent invoices:** the latest 5 invoices (number, client, total, status), each linking to details, plus "View all".
-3. A prominent **New invoice** button.
-4. Currencies with no activity are hidden. With no invoices at all, the dashboard shows a welcome state with steps: complete profile → add a client → connect Stripe (optional) → create an invoice.
-5. Reminder banners when relevant: "Complete your profile to send invoices" and "Connect Stripe to get paid online".
+1. **Title row:** a greeting with the user's first name ("Good morning, Ana", by the browser's local time; just "Dashboard" when the profile has no full name) and a one-line status: "2 invoices are overdue" or "Nothing overdue, you're all caught up". On the right: a prominent **New invoice** button and a secondary **New client** button.
+2. **Currency switcher:** amounts are never added across currencies. The stat cards and the chart show one currency at a time, picked with a switcher that lists only currencies with activity (Not paid invoices, or payments in the last 12 months). The switcher is hidden when there's only one. The choice is kept in the URL (`?currency=EUR`). Default: the profile's default currency if it has activity, otherwise the one with the most activity. With no activity at all, the cards show zeros in the profile's default currency.
+3. **Stat cards** for the selected currency, each opening the invoice list with the matching filter:
+   - **Outstanding:** total and count of Not paid invoices → Not paid filter.
+   - **Overdue:** total and count of Not paid invoices past their due date → Overdue filter. The card is tinted red only when there's something overdue.
+   - **Paid this month:** total received in the current calendar month, with a trend compared to the same point last month ("+12% vs same time last month"), or "No payments by this time last month" → Paid filter.
+4. **Paid chart:** an area chart of the total received per month in the selected currency, last 6 months by default, with a 6 / 12 months toggle. Hovering a month shows its total. The current month is highlighted.
+5. **Due soon:** next to the chart, up to 5 Not paid invoices due in the next 7 days (today included), soonest first, in every currency (number, client, total, "Due today" / "Due in 3 days"), each linking to details. Overdue invoices aren't repeated here. Empty: "Nothing due this week".
+6. **Recent invoices:** the latest 5 invoices in every currency (client initials, number, client, total, status), each linking to details, plus "View all".
+7. With no invoices at all, the dashboard shows a welcome checklist instead ("2 of 4 done"): complete profile → add a client → connect Stripe (optional) → create an invoice. Finished steps are ticked off.
+8. Reminder banners when relevant: "Complete your profile to send invoices" and "Connect Stripe to get paid online". They can't be dismissed.
+9. Numbers count up and the chart animates in, except when the user prefers reduced motion. Positive trends use a green "success" colour, negative ones red.
 
 ### 6.16 Landing page
 
@@ -600,7 +604,7 @@ Main navigation (header on desktop, menu on mobile), text only with no icons: **
 
 | Screen | Purpose |
 |---|---|
-| Dashboard | Totals per currency, recent invoices, New invoice |
+| Dashboard | Greeting, totals per currency (switcher), paid chart, due soon, recent invoices, New invoice / New client |
 | Invoices | Paginated list with filters, search, row actions |
 | New invoice | Invoice form |
 | Invoice details | Preview + actions |

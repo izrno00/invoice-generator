@@ -17,4 +17,5 @@
 - Users switch between Dark and Light with the animated sun/moon button in the app header, left of the avatar (`components/ui/animated-theme-toggle.tsx`, from 21st.dev, built on the shadcn `Button` and `motion`). The choice is saved per browser (next-themes, `localStorage` key `theme`), not on the account.
 - Every web page follows the theme: the app, auth pages, the marketing page and the public pay page. The public pages have no switch of their own and use whatever the browser has stored (dark by default).
 - Invoice emails and PDFs always stay light.
+- `--success` / `--success-foreground` (`text-success`, `bg-success/10`, …) mark positive changes, such as a rising trend on the dashboard. Don't use them for status badges; those keep the variants in Tech.md §12.
 - Use the semantic tokens from `app/globals.css` (`bg-background`, `text-muted-foreground`, etc.). They have light (`:root`) and dark (`.dark`) values from the shadcn preset, so don't hardcode colors or add `dark:` overrides unless a token can't express it.

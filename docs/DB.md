@@ -325,6 +325,7 @@ Not exposed. Only touched by the numbering trigger.
 | `private.protect_invoice_items()` | trigger fn on `invoice_items` **before insert/update/delete** | invoker | Rejects any change when the parent invoice is `paid`. `invoice_id` is immutable |
 | `public.save_invoice(p_invoice jsonb, p_items jsonb)` | RPC | **invoker** (RLS applies) | Creates or updates an invoice (status `draft` or `unpaid` only) and **replaces** its line items in one transaction. Returns the invoice row |
 | `public.dashboard_summary()` | RPC | **invoker** (RLS applies) | Per currency: `outstanding_count`, `outstanding_cents`, `overdue_count`, `overdue_cents`, `paid_this_month_cents` (by `paid_currency`, current UTC month) |
+| `public.dashboard_paid_by_month()` | RPC | **invoker** (RLS applies) | Per `paid_currency` and month (`month` = first day, UTC) for the last 12 months including the current one: `paid_cents`, and `paid_to_date_cents` = payments made no later into their month than now is into the current month (for "vs same time last month"). Months without payments are omitted. See §11 |
 | `public.delete_client(p_client_id uuid, p_delete_unpaid boolean default false)` | RPC | **invoker** (RLS applies) | Deletes a client in one transaction. With `p_delete_unpaid`, first deletes its `draft` / `unpaid` invoices and **returns** their `invoice_id`, `pdf_path`, `stripe_checkout_session_id` so the app can clean up. Other invoices (all paid ones) are kept and the FK clears their `client_id`. Raises `P0002` if the client doesn't exist or isn't the caller's |
 
 > **Note on deleting users:** because paid invoices can't be deleted, deleting an `auth.users` row that owns paid invoices fails (the cascade hits the paid-lock trigger). That's acceptable because account deletion is out of scope (PRD §3.2). If it's needed later, add an explicit bypass to `protect_invoice` (e.g. a transaction-local setting that only a server-side "delete account" function sets).
@@ -358,7 +359,7 @@ RLS is **enabled on every table in `public`**. All policies target `to authentic
 
 Paid-lock rules aren't in the policies. They're in triggers (§4), so they also apply to the secret-key client.
 
-**Grants:** `anon` has nothing. `authenticated` gets exactly the privileges matching the policies above (e.g. `select` only on `stripe_accounts`; `update(full_name, company_name, email, address, vat_id, website, default_currency)` on `profiles`). `service_role` gets full access to app tables. RPC functions: `execute` is revoked from `public` and `anon` and granted to `authenticated` (`save_invoice`, `dashboard_summary`, `delete_client`).
+**Grants:** `anon` has nothing. `authenticated` gets exactly the privileges matching the policies above (e.g. `select` only on `stripe_accounts`; `update(full_name, company_name, email, address, vat_id, website, default_currency)` on `profiles`). `service_role` gets full access to app tables. RPC functions: `execute` is revoked from `public` and `anon` and granted to `authenticated` (`save_invoice`, `dashboard_summary`, `dashboard_paid_by_month`, `delete_client`).
 
 ---
 
@@ -1201,3 +1202,56 @@ Run in a transaction that rolls back, as two simulated users (`set local role au
 4. `delete_client(id, true)` removes and returns the draft and unpaid invoices; the paid one survives.
 5. `anon` can't execute the function.
 6. `get_advisors` reports nothing new; types are regenerated.
+
+---
+
+## 11. SQL migration: `003_dashboard_paid_by_month`
+
+Feeds the dashboard's paid chart and the "Paid this month" trend (PRD §6.15 AC3–4, Tech.md §8.5). Like `dashboard_summary()`, months are calendar months of the database time zone (UTC) and amounts are grouped by `paid_currency`, never added across currencies.
+
+```sql
+create or replace function public.dashboard_paid_by_month()
+returns table (
+  currency           public.currency_code,
+  month              date,
+  paid_cents         bigint,
+  paid_to_date_cents bigint
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    i.paid_currency,
+    date_trunc('month', i.paid_at)::date,
+    sum(i.paid_amount_cents)::bigint,
+    -- Only payments made no later into their month than now is into this
+    -- month, so last month's value is comparable with this month so far.
+    sum(
+      case
+        when i.paid_at - date_trunc('month', i.paid_at) <= now() - date_trunc('month', now())
+        then i.paid_amount_cents
+        else 0
+      end
+    )::bigint
+  from public.invoices i
+  where i.user_id = (select auth.uid())
+    and i.status = 'paid'
+    and i.paid_at >= date_trunc('month', now()) - interval '11 months'
+  group by 1, 2
+  order by 1, 2;
+$$;
+
+revoke execute on function public.dashboard_paid_by_month() from public, anon;
+grant  execute on function public.dashboard_paid_by_month() to authenticated;
+```
+
+### 11.1 Post-migration checks
+
+Run in a transaction that rolls back, as a simulated user (`set local role authenticated` + `request.jwt.claims`):
+
+1. Paid invoices in two currencies across several months return one row per currency and month, with the right sums. Draft and unpaid invoices and payments older than 11 months back are left out.
+2. `paid_to_date_cents` of last month only counts payments up to the same offset into the month as now.
+3. Another user's paid invoices never appear. `anon` can't execute the function.
+4. `get_advisors` reports nothing new; types are regenerated.

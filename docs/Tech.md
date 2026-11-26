@@ -173,7 +173,9 @@ components/
                                   # nav-items (text-only items), nav-user (user menu)
   settings/                       # settings-nav, profile-form, payments-panel
   pay/                            # pay-panel (summary + Pay now, end states)
-  dashboard/                      # profile-banner
+  dashboard/                      # greeting, currency-switcher, stat-cards, animated-amount,
+                                  # paid-chart, due-soon-card, recent-invoices-card,
+                                  # setup-checklist, profile-banner, stripe-banner, skeletons
   invoices/                       # invoice-form, line-items-editor (+ live totals), date-picker,
                                   # status-badge, invoice-preview, invoice-actions (row menu,
                                   # detail buttons), send-dialog, confirm-dialogs (mark paid,
@@ -212,6 +214,8 @@ lib/
     document.ts                   # stored row + items → PDF/preview data, form values
     names.ts  email-text.ts       # sender / greeting names, subject, default message, From header
     status.ts                     # isOverdue, allowedActions(invoice), status filters
+  dashboard/
+    summary.ts                    # pure: active currencies, currency pick, month series, trend, setup steps
   validation/
     fields.ts                     # shared zod fields (optional text / email)
     profile.ts  client.ts  invoice.ts   # zod schemas (draft vs final), send schema
@@ -398,7 +402,15 @@ Details:
 
 ### 8.5 Dashboard
 
-One RPC: `dashboard_summary()` (security invoker, see [DB.md](DB.md)) returns per-currency outstanding / overdue / paid-this-month. Plus a separate query for the 5 most recent invoices. Each widget sits in its own `<Suspense>` with a skeleton.
+Data access in `lib/dal/dashboard.ts`, pure logic (currency pick, month series, trend, setup steps) in `lib/dashboard/summary.ts` (unit tested).
+
+- `dashboard_summary()` RPC (security invoker, see [DB.md](DB.md)): per-currency outstanding / overdue / paid-this-month.
+- `dashboard_paid_by_month()` RPC (security invoker): per currency and month for the last 12 months (current month included), `paid_cents` and `paid_to_date_cents` (payments up to the same offset into the month as now). The trend compares this month's total with last month's `paid_to_date_cents`.
+- Recent: the 5 latest invoices (`invoice_date desc, created_at desc`), all currencies.
+- Due soon: `status = 'unpaid'` and `due_date` between today and today + 7 (UTC, like overdue), `due_date asc`, limit 5, all currencies.
+- Setup: `head: true` counts of invoices and clients, plus the profile and Stripe rows already loaded by their DAL functions.
+- `?currency=XXX` selects the currency for the cards and the chart. It's validated against the active currencies; anything else falls back to the default (PRD §6.15 AC2). The switcher and the chart's 6/12 toggle are Client Components; the 12-month series is loaded once and sliced on the client.
+- The page decides between the welcome checklist and the full dashboard inside one `<Suspense>`; each widget then sits in its own `<Suspense>` with a skeleton.
 
 ---
 
@@ -552,10 +564,12 @@ Follow [UI-rules.md](UI-rules.md) and `AGENTS.md`: shadcn components from the re
 | Lists | `table`, `pagination`, `badge`, `dropdown-menu` (row actions), `input` (search), `empty` |
 | Feedback | `sonner` (toasts), `skeleton` (Suspense fallbacks), `alert` (banners), `spinner` |
 | Dialogs | `dialog` (send, add client), `alert-dialog` (delete, mark as paid, resend prompt, discard changes) |
-| Dashboard | `card` |
+| Dashboard | `card`, `chart` (recharts area chart), `toggle-group` (currency switcher, 6/12 months), `progress` (welcome checklist), `avatar` (client initials), `badge`, `alert`, `empty` |
 
 - **Line items editor:** `react-hook-form` `useFieldArray`. Totals recomputed with `calculateInvoice()` on every change (`useWatch`). On mobile, each line becomes a stacked card.
 - **Status badge:** Draft = outline, Not paid = secondary, Paid = default/success token, Overdue = destructive. Use tokens, not hard-coded colours.
+- **Success token:** `--success` / `--success-foreground` in `app/globals.css` (light + dark, mapped to `bg-success`, `text-success`). Used for positive trends on the dashboard.
+- **Motion:** dashboard numbers count up and the chart animates in (`motion`, recharts). Both are off when `prefers-reduced-motion` is set.
 - **Responsive:** tables collapse to cards below `md`. Header nav moves into a sheet below `md`. Dialogs become full-width on small screens. Minimum supported width 360 px.
 - **Pending states:** buttons show a spinner and are disabled while an action runs (`useActionState` / `useTransition`).
 
@@ -601,6 +615,8 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 
 **Database:** after applying the migration, use `execute_sql` to check that RLS isolates two test users, that a paid invoice rejects update/delete, that numbering is sequential per user/year, and that client deletion keeps paid invoices. Run `get_advisors`.
 
+**Dashboard demo data:** `scripts/demo/dashboard-demo-seed.sql` gives one account a year of activity (4 clients on the undeliverable `payable-demo.invalid` domain, paid / overdue / due-soon / draft invoices, EUR + USD, dates relative to today; no PDFs). `scripts/demo/dashboard-demo-cleanup.sql` removes exactly those rows, paid ones included, by turning the paid-lock triggers off inside its own transaction, and rewinds the invoice number counters. Both run as the database owner with `<USER_ID>` replaced.
+
 **Manual E2E checklist (Stripe test mode):**
 1. Sign up → confirmation email → confirm → dashboard.
 2. Forgot password → reset → login.
@@ -613,7 +629,7 @@ Update `.env.example` with the new keys (no values). Never prefix secrets with `
 9. Mark another invoice paid manually → its pay link shows "paid".
 10. Delete a sent invoice → pay link shows "no longer valid".
 11. Delete a client with paid + unpaid invoices (both options).
-12. List: pagination, every filter, search, URL persistence. Dashboard numbers per currency.
+12. List: pagination, every filter, search, URL persistence. Dashboard numbers per currency: switcher keeps `?currency` on refresh, cards open the right filters, chart 6/12 toggle and tooltip, Due soon and Recent link to details, trend wording, welcome checklist on an account with no invoices, reduced motion turns animations off.
 13. Check on mobile width (360 px).
 
 ---
