@@ -35,7 +35,7 @@ export function AppHeader() {
           href="/dashboard"
           className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <Logo className="h-7" />
+          <Logo className="h-6" />
         </Link>
         <Suspense fallback={<NavLinks className="hidden md:flex" />}>
           <MainNav className="hidden md:flex" />

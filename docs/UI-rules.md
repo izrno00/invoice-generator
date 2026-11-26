@@ -18,4 +18,5 @@
 - Every web page follows the theme: the app, auth pages, the marketing page and the public pay page. The public pages have no switch of their own and use whatever the browser has stored (dark by default).
 - Invoice emails and PDFs always stay light.
 - `--success` / `--success-foreground` (`text-success`, `bg-success/10`, …) mark positive changes, such as a rising trend on the dashboard. Don't use them for status badges; those keep the variants in Tech.md §12.
+- Marketing page exceptions: the sticky header, the hero and the Why Payable section (`components/marketing/marketing-nav.tsx`, `hero.tsx`, `why-payable.tsx`) are always dark, whatever the stored theme (a `dark` class on each). Primary buttons on the landing page are white (`whiteButton` from `components/marketing/button-styles.ts`) instead of lime; the app keeps lime.
 - Use the semantic tokens from `app/globals.css` (`bg-background`, `text-muted-foreground`, etc.). They have light (`:root`) and dark (`.dark`) values from the shadcn preset, so don't hardcode colors or add `dark:` overrides unless a token can't express it.

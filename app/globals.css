@@ -132,6 +132,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /*
+    Landing hero ribbon (always dark): each line is a step from teal (top) through lime (--primary)
+    to yellow-lime (bottom), plus the purple comets.
+    Plain values: relative colour syntax (`oklch(from var(--primary) …)`) is dropped by the CSS build.
+  */
+  --ribbon-start: oklch(0.82 0.17 162);
+  --ribbon-end: oklch(0.86 0.22 122);
+  --comet-violet: oklch(0.7 0.25 320);
 }
 
 @layer base {

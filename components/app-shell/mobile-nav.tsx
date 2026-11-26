@@ -29,7 +29,7 @@ export function MobileNav() {
       <SheetContent side="left">
         <SheetHeader>
           <SheetTitle>
-            <Logo className="h-7" />
+            <Logo className="h-6" />
           </SheetTitle>
         </SheetHeader>
         <MobileNavLinks onNavigate={() => setOpen(false)} />
