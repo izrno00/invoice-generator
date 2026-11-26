@@ -98,6 +98,7 @@ The **client** (the freelancer's customer) never logs in. A client only:
 
 - Marketing landing page, built section by section after the app is finished. Until then, a simple placeholder landing page with **Log in** / **Sign up**.
 - CC/BCC the user on invoice emails
+- Paid plans, shown on the landing page's Pricing section: **Free** $0 (5 invoices per month), **Plus** $10/month (50 invoices per month), **Pro** $20/month (unlimited invoices). Every plan gets every feature; only the monthly invoice limit differs. Prices are in USD, monthly only. In v1 there is no billing and no limit is enforced; every plan's button goes to sign-up.
 - Editable email subject
 - Payment reminders
 - Sending from the user's own email domain

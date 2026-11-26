@@ -25,7 +25,8 @@ export function MarketingHero() {
       </div>
 
       <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 md:px-8">
-        <div className="flex max-w-[30rem] flex-col items-start pt-14 md:pt-20">
+        {/* Pill, heading, text and buttons enter as one block on load; the window follows. */}
+        <div className="flex max-w-[30rem] flex-col items-start pt-14 motion-safe:animate-fade-up md:pt-20">
           <a
             href="#features"
             className="group/pill inline-flex items-center gap-2.5 rounded-md border bg-background/60 py-1 pr-2 pl-2.5 text-xs font-medium backdrop-blur-sm outline-none transition-colors hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -68,7 +69,7 @@ export function MarketingHero() {
           Below xl the window sits under the CTAs, cropped. From xl it moves to the right, starts a
           third of the way down and runs to the hero's bottom edge, bleeding off the right side.
         */}
-        <div className="relative -mr-4 mt-14 h-80 overflow-hidden md:-mr-8 md:h-[30rem] xl:absolute xl:top-[35%] xl:bottom-0 xl:left-[38%] xl:mt-0 xl:mr-0 xl:h-auto xl:w-[1060px] xl:rounded-t-xl">
+        <div className="relative -mr-4 mt-14 h-80 overflow-hidden motion-safe:animate-fade-up motion-safe:[animation-delay:150ms] md:-mr-8 md:h-[30rem] xl:absolute xl:top-[35%] xl:bottom-0 xl:left-[38%] xl:mt-0 xl:mr-0 xl:h-auto xl:w-[1060px] xl:rounded-t-xl">
           <DashboardMockup className="w-[760px] origin-top-left max-md:scale-[0.55] md:w-[1100px] xl:w-full" />
           {/* The window dissolves into the hero's bottom edge. */}
           <div

@@ -50,10 +50,10 @@ const MOCK = {
     paidCents,
   })) satisfies MonthPoint[],
   dueSoon: [
-    { client: "Northwind Studio", number: "INV-0142", cents: 1_250_00, due: "Due today", today: true },
-    { client: "Brightline Media", number: "INV-0139", cents: 860_00, due: "Due in 2 days", today: false },
-    { client: "Okafor & Co.", number: "INV-0141", cents: 2_400_00, due: "Due in 4 days", today: false },
-    { client: "Lumen Labs", number: "INV-0137", cents: 540_00, due: "Due in 6 days", today: false },
+    { client: "Northwind Studio", number: "2026-041", cents: 1_250_00, due: "Due today", today: true },
+    { client: "Brightline Media", number: "2026-039", cents: 860_00, due: "Due in 2 days", today: false },
+    { client: "Okafor & Co.", number: "2026-040", cents: 2_400_00, due: "Due in 4 days", today: false },
+    { client: "Lumen Labs", number: "2026-037", cents: 540_00, due: "Due in 6 days", today: false },
   ],
 }
 

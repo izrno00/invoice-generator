@@ -5,7 +5,7 @@ import type { Database } from "@/lib/supabase/database.types"
 
 /** Routes reachable without a session (Tech.md §3). */
 const PUBLIC_PREFIXES = ["/auth", "/pay"]
-const PUBLIC_EXACT = ["/", "/api/stripe/webhook"]
+const PUBLIC_EXACT = ["/", "/privacy", "/terms", "/api/stripe/webhook"]
 
 /** Auth screens a signed-in user is sent away from (PRD §6.1 AC9). */
 const SIGNED_IN_REDIRECTS = ["/auth/login", "/auth/sign-up"]

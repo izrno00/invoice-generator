@@ -1,15 +1,20 @@
+import { MarketingFaq } from "@/components/marketing/faq"
+import { MarketingFeatures } from "@/components/marketing/features"
 import { MarketingHero } from "@/components/marketing/hero"
-import { MarketingNav } from "@/components/marketing/marketing-nav"
+import { MarketingPricing } from "@/components/marketing/pricing"
+import { MarketingProduct } from "@/components/marketing/product"
 import { WhyPayable } from "@/components/marketing/why-payable"
 
-/** Marketing landing page (PRD §6.16), built section by section. */
+/** Marketing landing page (PRD §6.16), built section by section. Header and footer come from the layout. */
 export default function LandingPage() {
   return (
-    <main className="flex flex-1 flex-col">
-      {/* Sticky header: a direct child of the page's column, so it stays on top for every section. */}
-      <MarketingNav />
+    <>
       <MarketingHero />
       <WhyPayable />
-    </main>
+      <MarketingProduct />
+      <MarketingFeatures />
+      <MarketingPricing />
+      <MarketingFaq />
+    </>
   )
 }

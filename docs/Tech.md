@@ -108,7 +108,7 @@ flowchart LR
 | Topic | Convention | Docs |
 |---|---|---|
 | **Proxy (formerly middleware)** | A root `proxy.ts` exports `proxy()` and calls `updateSession()`. **It doesn't exist yet. Create it.** Proxy only refreshes the Supabase session cookie and does *optimistic* redirects. It is **not** the security boundary | `01-app/01-getting-started/16-proxy.md`, `03-api-reference/03-file-conventions/proxy.md` |
-| **Public routes** | The allowlist in `updateSession` must be updated. Public: `/`, `/auth/*`, `/pay/*`, `/api/stripe/webhook`. Everything else redirects to `/auth/login?next=<path>` when there's no session | |
+| **Public routes** | The allowlist in `updateSession` must be updated. Public: `/`, `/privacy`, `/terms`, `/auth/*`, `/pay/*`, `/api/stripe/webhook`. Everything else redirects to `/auth/login?next=<path>` when there's no session | |
 | **Cache Components** (`cacheComponents: true`) | Reading `cookies()` / the session or user data outside `<Suspense>` is a build error. Pattern: the static shell (layout, nav, headings) renders immediately, and anything that reads the session or DB is in an async component inside `<Suspense fallback={<Skeleton/>}>`. Don't `await` the session at the top level of a layout. User data is **not** cached with `use cache` in v1 (per-user, RLS-scoped, changes often) | `02-guides/authentication-with-cache-components.md`, `01-getting-started/08-caching.md`, `02-guides/streaming.md` |
 | **Typed routes** | Use the global `PageProps<'/invoices/[id]'>`, `LayoutProps<'/'>` and `RouteContext<'/invoices/[id]/pdf'>` helpers. `params` and `searchParams` are Promises | `03-api-reference/03-file-conventions/page.md` |
 | **Mutations** | Server Actions in `actions.ts` files (`'use server'`). Every action: (1) `requireUser()`, (2) zod-validate input, (3) do the work, (4) `revalidatePath()` / `refresh()`, (5) return a typed result or `redirect()` | `01-getting-started/07-mutating-data.md`, `02-guides/server-actions.md`, `02-guides/forms.md` |
@@ -126,7 +126,10 @@ app/
   layout.tsx                      # root layout (fonts, <ThemeProvider>, <Toaster/>)
   globals.css                     # theme tokens (shadcn preset)
   (marketing)/
-    page.tsx                      # landing (placeholder in v1)
+    layout.tsx                    # sticky marketing header + footer
+    page.tsx                      # landing
+    privacy/page.tsx              # placeholder until the policy is written (noindex)
+    terms/page.tsx                # placeholder until the terms are written (noindex)
   auth/
     login/page.tsx
     sign-up/page.tsx
